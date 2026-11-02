@@ -1,0 +1,52 @@
+{
+  "name": "adf-bridge",
+  "version": "0.1.0",
+  "description": "ADF Bridge for Claude Code: sync Jira and Confluence with git, as AsciiDoc.",
+  "license": "MIT",
+  "author": "Sky Morey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smorey2/adf-bridge.git"
+  },
+  "keywords": [
+    "confluence",
+    "jira",
+    "atlassian",
+    "adf",
+    "asciidoc",
+    "claude-code",
+    "docs-as-code"
+  ],
+  "type": "module",
+  "bin": {
+    "adf-bridge": "bin/adf-bridge.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "plugin",
+    ".claude-plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node src/cli.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "node scripts/clean.ts && tsc -p tsconfig.build.json",
+    "release": "node scripts/release.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "5.9"
+  }
+}

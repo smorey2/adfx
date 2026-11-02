@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # dist/ is built and committed only by "npm run release"
+  dist-only-in-releases:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: dist/ unchanged unless the version changed
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          if git diff --quiet "$base" HEAD -- dist; then exit 0; fi
+          if git diff "$base" HEAD -- package.json | grep -q '"version"'; then exit 0; fi
+          echo "dist/ changed without a release; dist/ is only built by npm run release" >&2
+          exit 1

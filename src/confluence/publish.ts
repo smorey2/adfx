@@ -1,0 +1,222 @@
+// Push edited mirror files back to their Confluence pages. Spec: docs/adr/0005-asciidoc-round-trip.md §4, §5.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { convert, buildShortIds } from '../core/adoc.ts';
+import { parseAdf } from '../core/adf.ts';
+import { buildPatch, gate, adfChanges } from '../core/patch.ts';
+import * as header from '../core/header.ts';
+import { writeFile, relPosix } from '../core/files.ts';
+import { pull, discover, mediaResolver, makeLinkResolver, hasMedia, indexExisting, type Log } from './pull.ts';
+import type { ConfluenceReader, PageWriter } from './api.ts';
+import type { Scope } from './config.ts';
+
+export type PublishStatus = 'unchanged' | 'refused' | 'conflict' | 'needs --accept-loss' | 'ready' | 'published' | 'ok' | 'pull-only blocks';
+
+export interface PublishResult {
+  id: string;
+  rel: string;
+  status: PublishStatus;
+  errors: string[];
+  losses: string[];
+  newVersion?: number;
+}
+
+export interface PublishOptions {
+  api: ConfluenceReader;
+  scope: Scope;
+  outDir: string;
+  files?: string[];
+  pages?: string[];
+  apply?: boolean;
+  acceptLoss?: boolean;
+  check?: boolean;
+  message?: string | null;
+  write?: PageWriter;
+  repull?: (id: string) => Promise<unknown>;
+  log?: Log;
+}
+
+export async function publish({ api, scope, outDir, files = [], pages = [], apply = false, acceptLoss = false, check = false, message, write, repull, log = console.log }: PublishOptions): Promise<PublishResult[]> {
+  const existing = indexExisting(outDir);
+  const byRel = new Map([...existing].map(([id, e]) => [e.rel, id]));
+  let targets: string[] = [];
+  for (const f of files) {
+    const rel = relPosix(outDir, path.resolve(f));
+    if (!byRel.has(rel)) throw new Error(`${f} is not a pulled Confluence page under ${outDir}`);
+    targets.push(byRel.get(rel)!);
+  }
+  for (const id of pages) {
+    if (!existing.has(id)) throw new Error(`no file for page ${id}; pull it first`);
+    targets.push(id);
+  }
+  const results: PublishResult[] = [];
+
+  // Scope (ADR-0002): the full tree, cross-checked against CQL, as for pull.
+  const { nodes } = await discover(api, scope);
+  if (!files.length && !pages.length) {
+    // body edits change the sync hash; title edits are found by comparing with the live title
+    const renamed = (id: string, title: string) => nodes.has(id) && title !== String(nodes.get(id)!.title).replace(/\s+/g, ' ').trim();
+    targets = [...existing].filter(([id, e]) => check || e.localEdits || renamed(id, e.title)).map(([id]) => id);
+  }
+  targets = [...new Set(targets)];
+  if (!targets.length) {
+    log('nothing to publish: no files have local edits');
+    return results;
+  }
+  const fileOf = (id: string) => (existing.has(id) ? existing.get(id)!.rel : null);
+  const totals = { blocks: 0, failed: 0 };
+
+  for (const id of targets) {
+    const e = existing.get(id)!;
+    const res: PublishResult = { id, rel: e.rel, status: 'unchanged', errors: [], losses: [] };
+    results.push(res);
+    const n = nodes.get(id);
+    if (!n || n.excluded) {
+      res.status = 'refused';
+      res.errors.push(`page ${id} is not in scope`);
+      log(`== ${e.rel}\n   REFUSED: page ${id} is not in scope (confluence.yaml)`);
+      continue;
+    }
+    const h = header.parse(fs.readFileSync(path.join(outDir, e.rel), 'utf8'))!;
+    const page = await api.page(id);
+    const version = page.version.number;
+    const liveAdf = parseAdf(page.body && page.body.atlas_doc_format && page.body.atlas_doc_format.value);
+    const attachments = hasMedia(liveAdf) ? await api.attachments(id) : null;
+    const { resolveMedia } = mediaResolver(attachments, `_attachments/${id}`);
+    const conv = convert(liveAdf, { resolveLink: makeLinkResolver(scope.site, id, e.rel, fileOf, nodes), resolveMedia });
+    const parseOpts = { headingOffset: Number(h.attrs['confluence-heading-offset'] || 0), resolveXref: (t: string) => xrefUrl(outDir, e.rel, t, byRel) };
+    const shortIds = buildShortIds(liveAdf);
+
+    if (check) {
+      const fails: string[] = [];
+      (liveAdf.content || []).forEach((node, j) => {
+        if (!conv.chunks[j] || conv.chunks[j].text === '') return;
+        const g = gate(node, conv.chunks[j].text, { ...parseOpts, refs: conv.refs }, { refs: conv.refs, shortIds });
+        if (!g.ok) fails.push(`block ${j + 1} ${node.type}: ${g.why}`);
+      });
+      const count = conv.chunks.filter((c) => c.text !== '').length;
+      totals.blocks += count;
+      totals.failed += fails.length;
+      res.status = fails.length ? 'pull-only blocks' : 'ok';
+      res.errors = fails;
+      log(`${fails.length ? 'PARTIAL' : 'ok     '} ${e.rel}  ${count - fails.length}/${count} blocks can be rebuilt${fails.length ? '\n   ' + fails.join('\n   ') : ''}`);
+      continue;
+    }
+
+    log(`== ${e.rel}  (page ${id}, v${version})`);
+    if (String(version) !== String(h.attrs['confluence-version'])) {
+      res.status = 'conflict';
+      res.errors.push(`Confluence is at v${version}, the file was pulled at v${h.attrs['confluence-version']}`);
+      log(`   CONFLICT: Confluence changed since this file was pulled (v${h.attrs['confluence-version']} -> v${version}).`);
+      log('   Pull it into a temporary directory, merge your edits, then publish again (ADR-0005 §5).');
+      continue;
+    }
+    const liveTitle = String(page.title).replace(/\s+/g, ' ').trim();
+    const title = h.title.trim();
+    const patch = buildPatch({ liveAdf, conv, body: h.body, parseOpts, shortIds });
+    res.errors = patch.errors;
+    res.losses = patch.losses;
+    if (title !== liveTitle) log(`   title: "${liveTitle}" -> "${title}"`);
+    for (const c of patch.changes) {
+      if (c.kind === 'changed') log(`   ~ block ${c.old! + 1} ${patch.describeOld(c.old!)}\n${indent(lineDiff(patch.oldText(c.old!), patch.newText(c.new!)))}`);
+      else if (c.kind === 'added')
+        log(
+          `   + new block\n${indent(
+            patch
+              .newText(c.new!)
+              .split('\n')
+              .map((l) => '+ ' + l)
+              .join('\n'),
+          )}`,
+        );
+      else log(`   - block ${c.old! + 1} removed: ${patch.describeOld(c.old!)}`);
+    }
+    if (patch.moved) log('   (blocks were reordered)');
+    for (const l of patch.losses) log(`   will be lost: ${l}`);
+    for (const err of patch.errors) log(`   REFUSED: ${err}`);
+    if (patch.errors.length) {
+      res.status = 'refused';
+      continue;
+    }
+    if (!patch.changes.length && !patch.moved && title === liveTitle) {
+      log('   no changes to publish' + (e.localEdits ? ' (the file differs from the last pull only in ways that read back the same)' : ''));
+      continue;
+    }
+    const counts = (['changed', 'added', 'removed'] as const).map((k) => `${patch.changes.filter((c) => c.kind === k).length} ${k}`).join(', ');
+    if (patch.losses.length && !acceptLoss) {
+      res.status = 'needs --accept-loss';
+      log(`   ${counts}. Hidden data above would be lost; re-run with --accept-loss to publish anyway.`);
+      continue;
+    }
+    res.status = 'ready';
+    const sent = adfChanges(liveAdf, patch.adf);
+    log(
+      `   Confluence changes (${sent.length}):\n${sent
+        .slice(0, 15)
+        .map((l) => '     ' + l)
+        .join('\n')}${sent.length > 15 ? `\n     … ${sent.length - 15} more` : ''}`,
+    );
+    log(`   ${counts}; every other block is copied unchanged.`);
+    if (!apply) continue;
+    if (!write) throw new Error('no writer configured; publishing needs credentials (not --fixtures)');
+
+    const out = await write({ id, title, adf: patch.adf, version: version + 1, message: message || 'Published with adf-bridge' });
+    res.status = 'published';
+    res.newVersion = (out && out.version && out.version.number) || version + 1;
+    log(`   published: v${version} -> v${res.newVersion}`);
+    // Mark the file clean, then pull the new version so the file matches Confluence exactly.
+    const file = path.join(outDir, e.rel);
+    const text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    writeFile(file, text.replace(/^:confluence-sync-hash: .*$/m, `:confluence-sync-hash: ${header.hash(header.parse(text)!.body)}`));
+    await (repull || ((pid: string) => pull({ api, scope, outDir, only: [pid], force: true, log: () => {} })))(id);
+  }
+
+  if (check) log(`\n${totals.blocks - totals.failed}/${totals.blocks} blocks can be rebuilt exactly; the rest are pull-only until the converter handles them.`);
+  else {
+    const by = (s: PublishStatus) => results.filter((r) => r.status === s).length;
+    log(`\nready ${by('ready')}, published ${by('published')}, refused ${by('refused')}, needs --accept-loss ${by('needs --accept-loss')}, conflicts ${by('conflict')}, unchanged ${by('unchanged')}`);
+    if (!apply && by('ready')) log('(dry run: nothing written; re-run with --apply)');
+  }
+  return results;
+}
+
+// xref:../other/page.adoc -> that page's Confluence URL
+function xrefUrl(outDir: string, fromRel: string, target: string, byRel: Map<string, string>): string | null {
+  const rel = path.posix.normalize(path.posix.join(path.posix.dirname(fromRel), target));
+  if (!byRel.has(rel)) return null;
+  const h = header.parse(fs.readFileSync(path.join(outDir, rel), 'utf8'));
+  return (h && h.attrs['confluence-source']) || null;
+}
+
+// Changed lines with one line of context, from a line-level LCS.
+export function lineDiff(a: string, b: string): string {
+  const x = a.split('\n');
+  const y = b.split('\n');
+  const dp = Array.from({ length: x.length + 1 }, () => new Uint32Array(y.length + 1));
+  for (let i = x.length - 1; i >= 0; i--) for (let j = y.length - 1; j >= 0; j--) dp[i][j] = x[i] === y[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const ops: [string, string][] = [];
+  let i = 0;
+  let j = 0;
+  while (i < x.length || j < y.length) {
+    if (i < x.length && j < y.length && x[i] === y[j]) {
+      ops.push(['  ', x[i++]]);
+      j++;
+    } else if (i < x.length && (j >= y.length || dp[i + 1][j] >= dp[i][j + 1])) ops.push(['- ', x[i++]]);
+    else ops.push(['+ ', y[j++]]);
+  }
+  const keep = ops.map((o, k) => o[0] !== '  ' || (ops[k - 1] && ops[k - 1][0] !== '  ') || (ops[k + 1] && ops[k + 1][0] !== '  '));
+  const out: string[] = [];
+  ops.forEach((o, k) => {
+    if (keep[k]) out.push(o[0] + o[1]);
+    else if (out[out.length - 1] !== '  …') out.push('  …');
+  });
+  return out.slice(0, 60).join('\n') + (out.length > 60 ? `\n  … ${out.length - 60} more lines` : '');
+}
+
+function indent(s: string): string {
+  return s
+    .split('\n')
+    .map((l) => '       ' + l)
+    .join('\n');
+}
