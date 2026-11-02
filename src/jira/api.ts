@@ -168,7 +168,9 @@ export class JiraFixtureApi implements JiraReader {
   }
 
   async activeSprints(boardId: string): Promise<Sprint[]> {
-    return (this.b(boardId).sprints || []).filter((s) => s.state === 'active').map(({ issues: _issues, ...s }) => s);
+    const b = this.b(boardId);
+    if (!b.sprints && b.type !== 'scrum') throw new Error(`GET /rest/agile/1.0/board/${boardId}/sprint -> 400 The board does not support sprints`);
+    return (b.sprints || []).filter((s) => s.state === 'active').map(({ issues: _issues, ...s }) => s);
   }
 
   async sprintIssueKeys(boardId: string, sprintId: string): Promise<string[]> {

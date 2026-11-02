@@ -47,6 +47,8 @@ function fixture(): JiraFixture {
         sprints: [{ id: 7, name: 'Sprint 7', state: 'active', startDate: '2026-10-20T00:00:00Z', endDate: '2026-11-03T00:00:00Z', goal: 'Return fees', issues: ['OMS-1', 'OMS-2'] }],
       },
       50: { name: 'Support', type: 'kanban', projectKey: 'SUP', issues: ['SUP-1', 'SUP-2'] },
+      60: { name: 'Team board', type: 'simple', projectKey: 'TEAM', sprints: [{ id: 9, name: 'Sprint 9', state: 'active', issues: ['TEAM-1'] }] },
+      61: { name: 'Team flow', type: 'simple', projectKey: 'FLOW', issues: ['FLOW-1'] },
     },
     issues: {
       'OMS-1': issue('OMS-1', 'Charge return fees', '3', 'In Progress', {
@@ -132,6 +134,16 @@ test('kanban boards show what is not done; projects are limited to their own key
   assert.deepStrictEqual(r.written.sort(), ['CORE/CORE-9.adoc', 'SUP/SUP-1.adoc', 'SUP/board.adoc']);
   assert.ok(api.queries.includes('project = "CORE" AND (statusCategory != Done) ORDER BY key ASC'));
   assert.doesNotMatch(s.read('SUP/board.adoc'), /SUP-2/);
+});
+
+test('team-managed boards use their active sprints, or what is not done when sprints are off', async () => {
+  const s = setup('site: x.atlassian.net\nboards:\n  - "60"\n  - "61"\n');
+  s.data.issues['TEAM-1'] = issue('TEAM-1', 'Team work', '3', 'In Progress');
+  s.data.issues['FLOW-1'] = issue('FLOW-1', 'Flow work', '3', 'In Progress');
+  const r = await pullJira({ api: new JiraFixtureApi(s.data), config: s.config, log: quiet });
+  assert.deepStrictEqual(r.written.sort(), ['FLOW/FLOW-1.adoc', 'FLOW/board.adoc', 'TEAM/TEAM-1.adoc', 'TEAM/board.adoc']);
+  assert.match(s.read('TEAM/board.adoc'), /== Sprint 9/);
+  assert.doesNotMatch(s.read('FLOW/board.adoc'), /== Sprint/);
 });
 
 test('include controls the sections', async () => {

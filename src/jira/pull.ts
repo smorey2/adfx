@@ -35,15 +35,20 @@ export async function pullJira({ api, config, dryRun = false, log = console.log 
   const sprintOf = new Map<string, string>(); // issue key -> sprint name, for the issue page
   const keys = new Set<string>();
 
-  // 1. Boards: the active sprint(s), or for boards without sprints, everything not done.
+  // 1. Boards: the active sprint(s), or for boards without sprints, everything not done. Scrum and
+  // team-managed ("simple") boards can have sprints; Jira answers 400 when a board does not.
   const views: BoardView[] = [];
   const usedBoardFiles = new Set<string>();
   for (const b of config.boards) {
     const board = await api.board(b.id);
     const columns = await api.boardColumns(b.id);
     const sprints: BoardView['sprints'] = [];
-    if (board.type === 'scrum') {
-      for (const s of await api.activeSprints(b.id)) {
+    const active = board.type === 'kanban' ? null : await api.activeSprints(b.id).catch((e: Error) => {
+      if (/ -> 400 /.test(e.message)) return null;
+      throw e;
+    });
+    if (active) {
+      for (const s of active) {
         const ks = await api.sprintIssueKeys(b.id, String(s.id));
         for (const k of ks) sprintOf.set(k, s.name);
         sprints.push({ sprint: s, keys: ks });
