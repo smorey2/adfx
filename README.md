@@ -9,9 +9,8 @@ adf-bridge keeps Confluence pages in your repo as AsciiDoc, next to your code, a
 - **Safe by default.** Only pages under the roots you list are ever touched. Push is a dry run until you add `--apply`, and refuses edits it cannot carry back exactly.
 
 - **Create** pages from your project's templates.
-- **Claude Code plugin:** `/adf-bridge:confluence pull | push | new | check` shows the dry run and only writes after you confirm in chat.
-
-Jira (read-only: a board's active sprint, one file per issue) is coming next. See [Roadmap](#roadmap).
+- **Mirror Jira, read-only:** a board's active sprint, one file per issue plus a board page.
+- **Claude Code plugin:** `/adf-bridge:confluence pull | push | new | check` shows the dry run and only writes after you confirm in chat; `/adf-bridge:jira pull` refreshes the issue mirror.
 
 ## Install
 
@@ -97,6 +96,30 @@ This writes a draft `.adoc` under the parent's folder, from the template. Fill i
 
 Templates are your project's own `.adoc` skeletons, listed in `confluence.yaml`. Sections, audience labels and layout are up to you.
 
+## Jira
+
+```bash
+npx adf-bridge init --board https://your-site.atlassian.net/jira/software/c/projects/ABC/boards/42
+npx adf-bridge jira pull --dry-run
+npx adf-bridge jira pull
+```
+
+This writes `jira.yaml`, then pulls the board's active sprint into `docs/jira/`: one page per issue (status, people, description, subtasks, links, comments) and `ABC/board.adoc` with the sprint by column. It is read-only, and the files are regenerated on every pull, so do not edit them. When the sprint closes, files for issues that left it are deleted; git keeps them.
+
+```yaml
+site: your-site.atlassian.net
+out: docs/jira
+boards:
+  - id: "42"
+    sprints: active            # the active sprint(s); boards without sprints: everything not done
+projects:                      # optional: more issues, always limited to that project
+  - key: CORE
+    jql: statusCategory != Done
+include: [description, comments, subtasks, links]
+```
+
+See [ADR-0008](docs/adr/0008-jira-read-only-mirror.md).
+
 ## Commands
 
 | Command | What it does |
@@ -109,6 +132,8 @@ Templates are your project's own `.adoc` skeletons, listed in `confluence.yaml`.
 | `adf-bridge confluence check` | Which blocks can be rebuilt exactly (the rest are pull-only) |
 | `adf-bridge confluence info` | Show the site, mirror, scope, wording rules and templates |
 | `adf-bridge confluence replace --map <file.json> [--apply]` | Replace exact table-cell values, e.g. real example data with fake |
+| `adf-bridge init --board <board URL>` | Write `jira.yaml` |
+| `adf-bridge jira pull [--dry-run]` | Pull the Jira issues `jira.yaml` names (read-only) |
 
 Every command takes `--config <file>` and `--fixtures <file>` (read a JSON snapshot instead of the API). Run `adf-bridge help` for the full list.
 
@@ -144,10 +169,7 @@ Values are always read as text, and unknown keys are errors, so a typo cannot qu
 - [ADR-0005](docs/adr/0005-asciidoc-round-trip.md): the AsciiDoc format, the ADF mapping, and how push patches pages.
 - [ADR-0006](docs/adr/0006-distribution-config-credentials.md): distribution, config and credentials.
 - [ADR-0007](docs/adr/0007-templates-and-new-pages.md): page templates and creating pages.
-
-## Roadmap
-
-- **Jira, read-only:** `jira.yaml` with a board's active sprint as the starting point, one file per issue plus a board page.
+- [ADR-0008](docs/adr/0008-jira-read-only-mirror.md): the read-only Jira mirror.
 
 ## Development
 

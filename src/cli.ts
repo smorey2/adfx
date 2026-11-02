@@ -10,16 +10,19 @@ import { pull } from './confluence/pull.ts';
 import { publish } from './confluence/publish.ts';
 import { replaceText } from './confluence/replace.ts';
 import { newPage } from './confluence/new.ts';
+import { JIRA_CONFIG_NAMES, loadJiraConfig } from './jira/config.ts';
+import { JiraApi, JiraFixtureApi } from './jira/api.ts';
+import { pullJira } from './jira/pull.ts';
 import { credentialsFile, removeCredentials, requireCredentials, resolveCredentials, saveCredentials } from './core/credentials.ts';
 import { findUp } from './core/files.ts';
 
 const TOKEN_URL = 'https://id.atlassian.com/manage-profile/security/api-tokens';
 
-const HELP = `adf-bridge: sync Confluence (and soon Jira) with git, as AsciiDoc.
+const HELP = `adf-bridge: sync Confluence and Jira with git, as AsciiDoc.
 
 Setup
-  adf-bridge init [--root <page URL or id>]... [--site <name>.atlassian.net] [--out <dir>] [--force]
-      Write confluence.yaml in this folder and make .adoc files use LF line endings.
+  adf-bridge init [--root <page URL>]... [--board <Jira board URL>]... [--site <name>.atlassian.net] [--out <dir>] [--force]
+      Write confluence.yaml (for --root) and/or jira.yaml (for --board), and make .adoc files use LF.
   adf-bridge login [--site <site>] [--email <email>] [--token-stdin] [--no-verify]
       Save your Atlassian email and API token for this user (never in the repo).
       Create a token at ${TOKEN_URL}
@@ -42,9 +45,14 @@ Confluence
   adf-bridge confluence replace --map <file.json> [--apply]
       Replace exact table-cell values (e.g. real example data with fake data).
 
+Jira (read-only)
+  adf-bridge jira pull [--dry-run]
+      Pull the issues jira.yaml names: one file per issue plus a page per board.
+      Files for issues that left scope are deleted (git keeps them).
+
 Options for every command
-  --config <file>     use this confluence.yaml (default: the nearest one in this folder or above)
-  --fixtures <file>   read Confluence from a JSON fixture instead of the API (no writes)
+  --config <file>     use this confluence.yaml or jira.yaml (default: the nearest one in this folder or above)
+  --fixtures <file>   read from a JSON fixture instead of the API (no writes)
   --out <dir>         mirror folder (default: "out" in confluence.yaml, else docs/confluence)
   -h, --help          show this help
   -v, --version       show the version`;
@@ -127,6 +135,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return whoami(args);
     case 'confluence':
       return confluence(sub, { ...args, _: rest });
+    case 'jira':
+      return jira(sub, { ...args, _: rest });
     default:
       throw new Error(`unknown command "${cmd}"; run "adf-bridge help"`);
   }
@@ -208,6 +218,20 @@ async function confluence(sub: string | undefined, args: Args): Promise<number> 
   }
 }
 
+// ---------- jira (read-only) ----------
+
+async function jira(sub: string | undefined, args: Args): Promise<number> {
+  if (sub !== 'pull') throw new Error(`unknown jira command "${sub ?? ''}"; use pull (Jira is read-only)`);
+  only(args, ['config', 'fixtures', 'out', 'dry-run']);
+  if (args._.length) throw new Error(`unexpected argument "${args._[0]}"`);
+  const cfg = loadJiraConfig({ explicit: value(args, 'config') });
+  if (value(args, 'out')) cfg.out = path.resolve(value(args, 'out')!);
+  const fixtures = value(args, 'fixtures');
+  const api = fixtures ? new JiraFixtureApi(JSON.parse(fs.readFileSync(fixtures, 'utf8'))) : new JiraApi({ site: cfg.site, ...requireCredentials(cfg.site) });
+  await pullJira({ api, config: cfg, dryRun: flag(args, 'dry-run') });
+  return 0;
+}
+
 function reader(cfg: ConfluenceConfig, args: Args): ConfluenceReader {
   const fixtures = value(args, 'fixtures');
   if (fixtures) return new FixtureApi(JSON.parse(fs.readFileSync(fixtures, 'utf8')));
@@ -224,26 +248,70 @@ function creator(cfg: ConfluenceConfig): PageCreator {
 
 // ---------- setup ----------
 
-async function init(args: Args): Promise<number> {
-  only(args, ['root', 'site', 'out', 'force']);
-  const file = path.resolve(CONFIG_NAMES[0]);
-  const existing = CONFIG_NAMES.map((n) => path.resolve(n)).find((f) => fs.existsSync(f));
-  if (existing && !flag(args, 'force')) throw new Error(`${path.basename(existing)} already exists here; edit it, or re-run with --force to replace it`);
+// "12", ".../boards/12", ".../RapidBoard.jspa?rapidView=12" -> "12"
+export function boardIdOf(s: string): string {
+  if (/^\d+$/.test(s)) return s;
+  const m = /\/boards\/(\d+)|[?&]rapidView=(\d+)/.exec(s);
+  if (!m) throw new Error(`not a board id or Jira board URL: ${s}`);
+  return m[1] || m[2];
+}
 
+function siteOf(urls: string[], explicit?: string): string {
+  let site = explicit;
+  for (const u of urls) {
+    const host = /^https:\/\/([^/]+)\//.exec(u);
+    if (host && !site) site = host[1];
+  }
+  if (!site) throw new Error('init needs --site <name>.atlassian.net (or full URLs)');
+  if (!/^[\w.-]+\.atlassian\.net$/.test(site)) throw new Error(`site must be <name>.atlassian.net, not ${site}`);
+  return site;
+}
+
+function refuseExisting(names: string[], force: boolean): void {
+  const existing = names.map((n) => path.resolve(n)).find((f) => fs.existsSync(f));
+  if (existing && !force) throw new Error(`${path.basename(existing)} already exists here; edit it, or re-run with --force to replace it`);
+}
+
+async function init(args: Args): Promise<number> {
+  only(args, ['root', 'board', 'site', 'out', 'force']);
   let roots = values(args, 'root');
-  if (!roots.length) {
-    if (!process.stdin.isTTY) throw new Error('init needs --root <Confluence page URL> (the page whose tree you want to sync)');
+  const boards = values(args, 'board');
+  if (!roots.length && !boards.length) {
+    if (!process.stdin.isTTY) throw new Error('init needs --root <Confluence page URL> and/or --board <Jira board URL>');
     const answer = await ask('Confluence page to sync, with everything under it (paste its URL): ');
     roots = answer ? [answer] : [];
     if (!roots.length) throw new Error('no page given');
   }
-  let site = value(args, 'site');
-  for (const r of roots) {
-    const host = /^https:\/\/([^/]+)\//.exec(r);
-    if (host && !site) site = host[1];
+  const force = flag(args, 'force');
+  if (roots.length) refuseExisting(CONFIG_NAMES, force);
+  if (boards.length) refuseExisting(JIRA_CONFIG_NAMES, force);
+  const next: string[] = [];
+  let site = '';
+
+  if (boards.length) {
+    site = siteOf(boards, value(args, 'site'));
+    const ids = boards.map(boardIdOf);
+    const out = roots.length ? 'docs/jira' : value(args, 'out') || 'docs/jira';
+    const yaml = [
+      '# adf-bridge Jira settings (read-only mirror): https://github.com/smorey2/adf-bridge',
+      `site: ${site}`,
+      `out: ${out}`,
+      'boards:',
+      ...ids.flatMap((id) => [`  - id: "${id}"`, '    sprints: active']),
+      '# projects:',
+      '#   - key: ABC',
+      '#     jql: statusCategory != Done',
+      'include: [description, comments, subtasks, links]',
+      '',
+    ].join('\n');
+    fs.writeFileSync(path.resolve(JIRA_CONFIG_NAMES[0]), yaml);
+    console.log(`wrote jira.yaml (site ${site}, board${ids.length === 1 ? '' : 's'} ${ids.join(', ')})`);
+    next.push('  adf-bridge jira pull --dry-run         see which issues would be pulled');
   }
-  if (!site) throw new Error('init needs --site <name>.atlassian.net (or a full page URL as --root)');
-  if (!/^[\w.-]+\.atlassian\.net$/.test(site)) throw new Error(`site must be <name>.atlassian.net, not ${site}`);
+  if (!roots.length) return initDone(site, next);
+
+  site = siteOf(roots, value(args, 'site'));
+  const file = path.resolve(CONFIG_NAMES[0]);
   const ids = roots.map(pageIdOf);
   const out = value(args, 'out') || 'docs/confluence';
 
@@ -264,7 +332,11 @@ async function init(args: Args): Promise<number> {
   ].join('\n');
   fs.writeFileSync(file, yaml);
   console.log(`wrote ${path.basename(file)} (site ${site}, ${ids.length} root${ids.length === 1 ? '' : 's'})`);
+  next.unshift('  adf-bridge confluence pull --dry-run   see what would be pulled', '  adf-bridge confluence pull             pull the pages into ' + out);
+  return initDone(site, next);
+}
 
+function initDone(site: string, next: string[]): number {
   const ga = path.resolve('.gitattributes');
   const rule = '*.adoc text eol=lf';
   const current = fs.existsSync(ga) ? fs.readFileSync(ga, 'utf8') : '';
@@ -272,12 +344,9 @@ async function init(args: Args): Promise<number> {
     fs.writeFileSync(ga, current + (current && !current.endsWith('\n') ? '\n' : '') + rule + '\n');
     console.log('added ".adoc text eol=lf" to .gitattributes');
   }
-
-  const signedIn = resolveCredentials(site);
   console.log('\nNext:');
-  if (!signedIn) console.log('  adf-bridge login                       save your Atlassian email and API token');
-  console.log('  adf-bridge confluence pull --dry-run   see what would be pulled');
-  console.log('  adf-bridge confluence pull             pull the pages into ' + out);
+  if (!resolveCredentials(site)) console.log('  adf-bridge login                       save your Atlassian email and API token');
+  for (const l of next) console.log(l);
   return 0;
 }
 
@@ -326,8 +395,10 @@ async function whoami(args: Args): Promise<number> {
 }
 
 function siteFromConfig(explicit?: string): string | undefined {
-  if (!explicit && !findUp(process.cwd(), CONFIG_NAMES)) return undefined;
-  return loadConfluenceConfig({ explicit }).site;
+  if (explicit) return /jira\.ya?ml$/i.test(explicit) ? loadJiraConfig({ explicit }).site : loadConfluenceConfig({ explicit }).site;
+  if (findUp(process.cwd(), CONFIG_NAMES)) return loadConfluenceConfig().site;
+  if (findUp(process.cwd(), JIRA_CONFIG_NAMES)) return loadJiraConfig().site;
+  return undefined;
 }
 
 // ---------- prompts ----------

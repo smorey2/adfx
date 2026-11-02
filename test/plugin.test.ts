@@ -23,7 +23,8 @@ test('plugin version, package version and the suggested install tag move togethe
   const plugin = json('plugins/adf-bridge/.claude-plugin/plugin.json');
   assert.strictEqual(plugin.name, 'adf-bridge');
   assert.strictEqual(plugin.version, pkg.version);
-  for (const rel of ['plugins/adf-bridge/skills/confluence/SKILL.md', 'README.md']) {
+  const skills = fs.readdirSync(path.join(root, 'plugins', 'adf-bridge', 'skills')).map((s) => `plugins/adf-bridge/skills/${s}/SKILL.md`);
+  for (const rel of [...skills, 'README.md']) {
     for (const m of fs.readFileSync(path.join(root, rel), 'utf8').matchAll(/smorey2\/adf-bridge#v([\w.-]+)/g)) assert.strictEqual(m[1], pkg.version, rel);
   }
 });

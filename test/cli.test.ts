@@ -57,6 +57,17 @@ test('init writes confluence.yaml and .gitattributes from a page URL; refuses to
   assert.throws(() => run('init', '--root', '1', '--site', 'example.atlassian.net'), /already exists/);
 });
 
+test('init --board writes jira.yaml from a board URL', () => {
+  const dir = tmp();
+  const env = { ...process.env, ADF_BRIDGE_CONFIG_DIR: tmp(), ATLASSIAN_EMAIL: '', ATLASSIAN_API_TOKEN: '', CONFLUENCE_EMAIL: '', CONFLUENCE_API_TOKEN: '' };
+  const out = execFileSync(process.execPath, [CLI, 'init', '--board', 'https://example.atlassian.net/jira/software/c/projects/ABC/boards/42'], { cwd: dir, env, encoding: 'utf8' });
+  assert.match(out, /wrote jira.yaml \(site example.atlassian.net, board 42\)/);
+  const yaml = fs.readFileSync(path.join(dir, 'jira.yaml'), 'utf8');
+  assert.match(yaml, /^site: example.atlassian.net$/m);
+  assert.match(yaml, /^ {2}- id: "42"$/m);
+  assert.ok(!fs.existsSync(path.join(dir, 'confluence.yaml')));
+});
+
 test('version and help', () => {
   const pkg = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '..', 'package.json'), 'utf8'));
   assert.strictEqual(execFileSync(process.execPath, [CLI, '--version'], { encoding: 'utf8' }).trim(), pkg.version);
