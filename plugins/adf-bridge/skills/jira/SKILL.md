@@ -9,13 +9,13 @@ Arguments: $ARGUMENTS
 
 ## Running adf-bridge
 
-- Run `npx adf-bridge <command>` from the project. If `npx adf-bridge --version` fails, tell the user to add it with `npm i -D github:smorey2/adf-bridge#v0.1.0` (or the release they use), and stop.
-- If there is no `jira.yaml`, ask for the Jira board URL, then run `npx adf-bridge init --board <board URL>`.
-- Run `npx adf-bridge whoami`. If it says "not signed in", ask the user to run `npx adf-bridge login` in their own terminal. Never ask for the API token in chat, never put it on a command line, and never print it.
+- In this skill, `adf-bridge` means `npx --no-install adf-bridge`, run from the project. `--no-install` makes sure the copy pinned in the project runs, never a download. If `npx --no-install adf-bridge --version` fails, tell the user to add it with `npm i -D github:smorey2/adf-bridge#v0.1.0` (or the release they use), and stop.
+- If there is no `jira.yaml`, ask for the Jira board URL, then run `adf-bridge init --board <board URL>`.
+- Run `adf-bridge whoami`. If it says "not signed in", ask the user to run `npx adf-bridge login` in their own terminal. Never ask for the API token in chat, never put it on a command line, and never print it.
 
 ## pull
 
-1. Run `npx adf-bridge jira pull --dry-run`.
+1. Run `adf-bridge jira pull --dry-run`.
 2. Summarise: issues in scope, files new or updated, and files that would be deleted because their issues left the sprint or board.
 3. Ask before running it without `--dry-run`, then report what changed and that it needs committing.
 
