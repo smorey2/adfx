@@ -4,7 +4,7 @@
 //
 //   site: example.atlassian.net
 //   out: docs/confluence                 # mirror folder, relative to this file
-//   message: Published with adf-bridge   # default version comment for pushes
+//   message: Published with adfx   # default version comment for pushes
 //   roots:                               # pages (or folders) synced with everything under them
 //     - id: "123456"
 //       space: DOCS                      # for people; only id is used
@@ -92,7 +92,7 @@ export function parseConfluenceConfig(text: string, { file = null, root = proces
     roots,
     exclude,
     out: path.resolve(root, str(doc.out, 'out', fail) || 'docs/confluence'),
-    message: str(doc.message, 'message', fail) || 'Published with adf-bridge',
+    message: str(doc.message, 'message', fail) || 'Published with adfx',
     main: { wording },
     templates,
   };
@@ -101,7 +101,7 @@ export function parseConfluenceConfig(text: string, { file = null, root = proces
 // Finds confluence.yaml in `start` or a parent folder (like git), or uses `explicit`.
 export function loadConfluenceConfig({ start = process.cwd(), explicit }: { start?: string; explicit?: string } = {}): ConfluenceConfig {
   const file = explicit ? path.resolve(explicit) : findUp(start, CONFIG_NAMES);
-  if (!file) throw new Error(`no confluence.yaml in ${path.resolve(start)} or any parent folder; run "adf-bridge init"`);
+  if (!file) throw new Error(`no confluence.yaml in ${path.resolve(start)} or any parent folder; run "adfx init"`);
   if (!fs.existsSync(file)) throw new Error(`${file} not found`);
   return parseConfluenceConfig(fs.readFileSync(file, 'utf8'), { file, root: path.dirname(file) });
 }

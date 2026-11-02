@@ -6,7 +6,7 @@ date: 2026-10-12
 
 # ADR-0003: Confluence-to-Markdown format and layout
 
-Kept for history. The first version of this sync, in the project adf-bridge was extracted from, exported pages as Markdown through an AI connector. ADR-0005 replaced it with AsciiDoc and a script-based engine. The layout rules below carried over.
+Kept for history. The first version of this sync, in the project adfx was extracted from, exported pages as Markdown through an AI connector. ADR-0005 replaced it with AsciiDoc and a script-based engine. The layout rules below carried over.
 
 ## Context
 

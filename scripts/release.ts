@@ -36,11 +36,11 @@ const setJsonVersion = (rel: string) => {
   fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
 };
 setJsonVersion('../package.json');
-setJsonVersion('../plugins/adf-bridge/.claude-plugin/plugin.json');
-const skills = fs.readdirSync(new URL('../plugins/adf-bridge/skills', import.meta.url)).map((s) => `../plugins/adf-bridge/skills/${s}/SKILL.md`);
+setJsonVersion('../plugins/adfx/.claude-plugin/plugin.json');
+const skills = fs.readdirSync(new URL('../plugins/adfx/skills', import.meta.url)).map((s) => `../plugins/adfx/skills/${s}/SKILL.md`);
 for (const rel of [...skills, '../README.md']) {
   const file = new URL(rel, import.meta.url);
-  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/smorey2\/adf-bridge#v\d+\.\d+\.\d+(-[\w.]+)?/g, `smorey2/adf-bridge#v${version}`));
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/smorey2\/adfx#v\d+\.\d+\.\d+(-[\w.]+)?/g, `smorey2/adfx#v${version}`));
 }
 
 sh('npm', ['run', 'build']);

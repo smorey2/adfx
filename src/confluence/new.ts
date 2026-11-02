@@ -66,6 +66,6 @@ export async function newPage({ api, config, outDir, title, parentId, template, 
   writeFile(file, text);
   log(`wrote ${rel} (new page "${clean}" under "${parent.title}")`);
   log('Edit it, then preview the page creation with:');
-  log(`  adf-bridge confluence push ${path.relative(process.cwd(), file).split(path.sep).join('/')}`);
+  log(`  adfx confluence push ${path.relative(process.cwd(), file).split(path.sep).join('/')}`);
   return file;
 }

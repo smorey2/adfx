@@ -8,7 +8,7 @@ date: 2026-10-12
 
 ## Context
 
-How adf-bridge works, and why, needs a stable source that contributors, users and AI agents can cite.
+How adfx works, and why, needs a stable source that contributors, users and AI agents can cite.
 
 ## Decision
 

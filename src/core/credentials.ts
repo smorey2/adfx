@@ -5,8 +5,8 @@
 //   2. CONFLUENCE_EMAIL + CONFLUENCE_API_TOKEN (older setups)
 //   3. the credentials file, entry for that site, then the default entry
 //
-// The file is per user and outside every repo: %APPDATA%\adf-bridge\credentials.json on Windows,
-// $XDG_CONFIG_HOME/adf-bridge/credentials.json (default ~/.config) elsewhere, readable only by the
+// The file is per user and outside every repo: %APPDATA%\adfx\credentials.json on Windows,
+// $XDG_CONFIG_HOME/adfx/credentials.json (default ~/.config) elsewhere, readable only by the
 // user. The token is never printed or logged.
 
 import fs from 'node:fs';
@@ -24,9 +24,9 @@ export interface Resolved extends Credentials {
 }
 
 export function configDir(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string {
-  if (env.ADF_BRIDGE_CONFIG_DIR) return env.ADF_BRIDGE_CONFIG_DIR;
-  if (platform === 'win32') return path.join(env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'adf-bridge');
-  return path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'adf-bridge');
+  if (env.ADFX_CONFIG_DIR) return env.ADFX_CONFIG_DIR;
+  if (platform === 'win32') return path.join(env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'adfx');
+  return path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'adfx');
 }
 
 export function credentialsFile(env: NodeJS.ProcessEnv = process.env): string {
@@ -38,7 +38,7 @@ function readStore(file: string): StoreFile {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    throw new Error(`${file} is not valid JSON; fix it or run "adf-bridge logout" and log in again`);
+    throw new Error(`${file} is not valid JSON; fix it or run "adfx logout" and log in again`);
   }
 }
 
@@ -62,7 +62,7 @@ export function resolveCredentials(site: string, env: NodeJS.ProcessEnv = proces
 
 export function requireCredentials(site: string, env: NodeJS.ProcessEnv = process.env): Resolved {
   const c = resolveCredentials(site, env);
-  if (!c) throw new Error(`no Atlassian credentials for ${site}: run "adf-bridge login" (or set ATLASSIAN_EMAIL and ATLASSIAN_API_TOKEN)`);
+  if (!c) throw new Error(`no Atlassian credentials for ${site}: run "adfx login" (or set ATLASSIAN_EMAIL and ATLASSIAN_API_TOKEN)`);
   return c;
 }
 

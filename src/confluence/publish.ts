@@ -171,7 +171,7 @@ export async function publish({ api, scope, outDir, files = [], pages = [], appl
     if (!apply) continue;
     if (!write) throw new Error('no writer configured; publishing needs credentials (not --fixtures)');
 
-    const out = await write({ id, title, adf: patch.adf, version: version + 1, message: message || 'Published with adf-bridge' });
+    const out = await write({ id, title, adf: patch.adf, version: version + 1, message: message || 'Published with adfx' });
     res.status = 'published';
     res.newVersion = (out && out.version && out.version.number) || version + 1;
     log(`   published: v${version} -> v${res.newVersion}`);
@@ -298,7 +298,7 @@ async function createPage({
       break;
     } catch (e) {
       if (attempt >= 4 || !/not in scope|cross-check/.test((e as Error).message)) {
-        log(`   the page was created, but pulling it back failed (${(e as Error).message.slice(0, 120)}); run "adf-bridge confluence pull" in a minute`);
+        log(`   the page was created, but pulling it back failed (${(e as Error).message.slice(0, 120)}); run "adfx confluence pull" in a minute`);
         break;
       }
       await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));

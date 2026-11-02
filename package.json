@@ -1,12 +1,12 @@
 {
-  "name": "adf-bridge",
+  "name": "adfx",
   "version": "0.1.0",
-  "description": "ADF Bridge for Claude Code: sync Jira and Confluence with git, as AsciiDoc.",
+  "description": "ADFX for Claude Code: sync Jira and Confluence with git, as AsciiDoc.",
   "license": "MIT",
   "author": "Sky Morey",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/smorey2/adf-bridge.git"
+    "url": "git+https://github.com/smorey2/adfx.git"
   },
   "keywords": [
     "confluence",
@@ -19,7 +19,7 @@
   ],
   "type": "module",
   "bin": {
-    "adf-bridge": "bin/adf-bridge.js"
+    "adfx": "bin/adfx.js"
   },
   "exports": {
     ".": {

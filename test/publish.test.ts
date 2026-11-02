@@ -88,7 +88,7 @@ const scope = scopeOf('site: x.atlassian.net\nroots:\n  - id: "100"\n    type: p
 const RICH = 'DOCS/eng/eng-rich.adoc';
 
 async function setup() {
-  const out = tmp('adf-bridge-publish-');
+  const out = tmp('adfx-publish-');
   const data = fixture();
   await pull({ api: new FixtureApi(data), scope, outDir: out, log: quiet });
   const file = path.join(out, RICH);

@@ -7,7 +7,7 @@ import { parseArgs, pageIdOf } from '../src/cli.ts';
 import { configDir, resolveCredentials, saveCredentials, removeCredentials, credentialsFile } from '../src/core/credentials.ts';
 import { tmp } from './helpers.ts';
 
-const CLI = path.resolve(import.meta.dirname, '..', 'bin', 'adf-bridge.js');
+const CLI = path.resolve(import.meta.dirname, '..', 'bin', 'adfx.js');
 
 test('args: flags, values, repeats, positionals', () => {
   const a = parseArgs(['confluence', 'push', 'a.adoc', '--page', '1', '--page=2', '--apply', '-h']);
@@ -26,7 +26,7 @@ test('page ids from ids and Confluence URLs', () => {
 
 test('credentials: env vars first, then the site entry, then the default; file outside the repo', () => {
   const dir = tmp();
-  const env = { ADF_BRIDGE_CONFIG_DIR: dir } as NodeJS.ProcessEnv;
+  const env = { ADFX_CONFIG_DIR: dir } as NodeJS.ProcessEnv;
   assert.strictEqual(resolveCredentials('a.atlassian.net', env), null);
   saveCredentials(null, { email: 'any@example.com', token: 't0' }, env);
   saveCredentials('a.atlassian.net', { email: 'a@example.com', token: 't1' }, env);
@@ -39,17 +39,17 @@ test('credentials: env vars first, then the site entry, then the default; file o
 });
 
 test('config folder per OS', () => {
-  assert.strictEqual(configDir({ APPDATA: 'C:\\Users\\u\\AppData\\Roaming' }, 'win32'), path.join('C:\\Users\\u\\AppData\\Roaming', 'adf-bridge'));
-  assert.strictEqual(configDir({ XDG_CONFIG_HOME: '/home/u/.config' }, 'linux'), path.join('/home/u/.config', 'adf-bridge'));
+  assert.strictEqual(configDir({ APPDATA: 'C:\\Users\\u\\AppData\\Roaming' }, 'win32'), path.join('C:\\Users\\u\\AppData\\Roaming', 'adfx'));
+  assert.strictEqual(configDir({ XDG_CONFIG_HOME: '/home/u/.config' }, 'linux'), path.join('/home/u/.config', 'adfx'));
 });
 
 test('init writes confluence.yaml and .gitattributes from a page URL; refuses to overwrite', () => {
   const dir = tmp();
-  const env = { ...process.env, ADF_BRIDGE_CONFIG_DIR: tmp(), ATLASSIAN_EMAIL: '', ATLASSIAN_API_TOKEN: '', CONFLUENCE_EMAIL: '', CONFLUENCE_API_TOKEN: '' };
+  const env = { ...process.env, ADFX_CONFIG_DIR: tmp(), ATLASSIAN_EMAIL: '', ATLASSIAN_API_TOKEN: '', CONFLUENCE_EMAIL: '', CONFLUENCE_API_TOKEN: '' };
   const run = (...args: string[]) => execFileSync(process.execPath, [CLI, ...args], { cwd: dir, env, encoding: 'utf8' });
   const out = run('init', '--root', 'https://example.atlassian.net/wiki/spaces/DOCS/pages/12345/Handbook');
   assert.match(out, /wrote confluence.yaml \(site example.atlassian.net, 1 root\)/);
-  assert.match(out, /adf-bridge login/);
+  assert.match(out, /adfx login/);
   const yaml = fs.readFileSync(path.join(dir, 'confluence.yaml'), 'utf8');
   assert.match(yaml, /^site: example.atlassian.net$/m);
   assert.match(yaml, /^ {2}- id: "12345"$/m);
@@ -59,7 +59,7 @@ test('init writes confluence.yaml and .gitattributes from a page URL; refuses to
 
 test('init --board writes jira.yaml from a board URL', () => {
   const dir = tmp();
-  const env = { ...process.env, ADF_BRIDGE_CONFIG_DIR: tmp(), ATLASSIAN_EMAIL: '', ATLASSIAN_API_TOKEN: '', CONFLUENCE_EMAIL: '', CONFLUENCE_API_TOKEN: '' };
+  const env = { ...process.env, ADFX_CONFIG_DIR: tmp(), ATLASSIAN_EMAIL: '', ATLASSIAN_API_TOKEN: '', CONFLUENCE_EMAIL: '', CONFLUENCE_API_TOKEN: '' };
   const out = execFileSync(process.execPath, [CLI, 'init', '--board', 'https://example.atlassian.net/jira/software/c/projects/ABC/boards/42'], { cwd: dir, env, encoding: 'utf8' });
   assert.match(out, /wrote jira.yaml \(site example.atlassian.net, board 42\)/);
   const yaml = fs.readFileSync(path.join(dir, 'jira.yaml'), 'utf8');
@@ -71,5 +71,5 @@ test('init --board writes jira.yaml from a board URL', () => {
 test('version and help', () => {
   const pkg = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '..', 'package.json'), 'utf8'));
   assert.strictEqual(execFileSync(process.execPath, [CLI, '--version'], { encoding: 'utf8' }).trim(), pkg.version);
-  assert.match(execFileSync(process.execPath, [CLI, 'help'], { encoding: 'utf8' }), /adf-bridge confluence push/);
+  assert.match(execFileSync(process.execPath, [CLI, 'help'], { encoding: 'utf8' }), /adfx confluence push/);
 });

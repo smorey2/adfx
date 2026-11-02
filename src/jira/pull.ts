@@ -28,7 +28,7 @@ interface BoardView {
   sprints: { sprint: Sprint | null; keys: string[] }[];
 }
 
-const GENERATED = 'adf-bridge jira pull; do not edit, the next pull replaces this file';
+const GENERATED = 'adfx jira pull; do not edit, the next pull replaces this file';
 
 export async function pullJira({ api, config, dryRun = false, log = console.log }: { api: JiraReader; config: JiraConfig; dryRun?: boolean; log?: Log }): Promise<JiraPullReport> {
   const report: JiraPullReport = { written: [], unchanged: [], deleted: [], issues: 0 };

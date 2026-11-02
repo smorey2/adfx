@@ -1,8 +1,8 @@
-# adf-bridge
+# adfx
 
-**ADF Bridge for Claude Code: sync Jira and Confluence with git.**
+**ADFX for Claude Code: sync Jira and Confluence with git.**
 
-adf-bridge keeps Confluence pages in your repo as AsciiDoc, next to your code, and pushes your edits back without losing what Confluence stores but text cannot show: inline comments, macro settings, cell colours, layouts, mentions. It is a plain command-line tool, so it works with or without Claude, on Windows, macOS and Linux.
+adfx keeps Confluence pages in your repo as AsciiDoc, next to your code, and pushes your edits back without losing what Confluence stores but text cannot show: inline comments, macro settings, cell colours, layouts, mentions. It is a plain command-line tool, so it works with or without Claude, on Windows, macOS and Linux.
 
 - **Pull** in-scope pages into `docs/confluence/` as `.adoc` files, with their images.
 - **Push** your edits back. Only the blocks you changed are rebuilt; every other block is copied from the live page byte for byte.
@@ -10,20 +10,20 @@ adf-bridge keeps Confluence pages in your repo as AsciiDoc, next to your code, a
 
 - **Create** pages from your project's templates.
 - **Mirror Jira, read-only:** a board's active sprint, one file per issue plus a board page.
-- **Claude Code plugin:** `/adf-bridge:confluence pull | push | new | check` shows the dry run and only writes after you confirm in chat; `/adf-bridge:jira pull` refreshes the issue mirror.
+- **Claude Code plugin:** `/adfx:confluence pull | push | new | check` shows the dry run and only writes after you confirm in chat; `/adfx:jira pull` refreshes the issue mirror.
 
 ## Install
 
 You need [Node.js](https://nodejs.org) 22 or later.
 
 ```bash
-npm i -D github:smorey2/adf-bridge#v0.1.0
+npm i -D github:smorey2/adfx#v0.1.0
 ```
 
 Or run it without installing:
 
 ```bash
-npx github:smorey2/adf-bridge init
+npx github:smorey2/adfx init
 ```
 
 ### Claude Code plugin
@@ -31,32 +31,32 @@ npx github:smorey2/adf-bridge init
 In Claude Code:
 
 ```
-/plugin marketplace add smorey2/adf-bridge
-/plugin install adf-bridge@adf-bridge
+/plugin marketplace add smorey2/adfx
+/plugin install adfx@adfx
 ```
 
-Then use `/adf-bridge:confluence pull`, `push`, `new` or `check`. The plugin runs the CLI installed in your project, so install that too.
+Then use `/adfx:confluence pull`, `push`, `new` or `check`. The plugin runs the CLI installed in your project, so install that too.
 
 To set it up for everyone working in a repo, commit this to the repo's `.claude/settings.json`:
 
 ```json
 {
   "extraKnownMarketplaces": {
-    "adf-bridge": { "source": { "source": "github", "repo": "smorey2/adf-bridge" } }
+    "adfx": { "source": { "source": "github", "repo": "smorey2/adfx" } }
   },
-  "enabledPlugins": { "adf-bridge@adf-bridge": true }
+  "enabledPlugins": { "adfx@adfx": true }
 }
 ```
 
 ## Quick start
 
-In your project folder:
+In your project folder. Run it as `npx --no-install adfx`, so only your project's copy runs and nothing is downloaded from npm:
 
 ```bash
-npx adf-bridge init --root https://your-site.atlassian.net/wiki/spaces/DOCS/pages/123456/Handbook
-npx adf-bridge login
-npx adf-bridge confluence pull --dry-run
-npx adf-bridge confluence pull
+npx --no-install adfx init --root https://your-site.atlassian.net/wiki/spaces/DOCS/pages/123456/Handbook
+npx --no-install adfx login
+npx --no-install adfx confluence pull --dry-run
+npx --no-install adfx confluence pull
 ```
 
 1. `init` writes `confluence.yaml` with that page as the root: it and everything under it is in scope. It also makes `.adoc` files use LF line endings in git.
@@ -68,13 +68,13 @@ npx adf-bridge confluence pull
 Edit a `.adoc` file, then:
 
 ```bash
-npx adf-bridge confluence push
+npx --no-install adfx confluence push
 ```
 
 The dry run shows, for each edited page, the AsciiDoc diff, the exact Confluence changes, anything that would be lost, and anything refused. When it looks right:
 
 ```bash
-npx adf-bridge confluence push --apply --message "Fix the return steps"
+npx --no-install adfx confluence push --apply --message "Fix the return steps"
 ```
 
 The file is pulled again at the new version. Commit it.
@@ -89,7 +89,7 @@ Editing text that has an inline comment detaches the comment. The dry run lists 
 ## New pages
 
 ```bash
-npx adf-bridge confluence new "Release Process" --parent <parent page URL> --template process
+npx --no-install adfx confluence new "Release Process" --parent <parent page URL> --template process
 ```
 
 This writes a draft `.adoc` under the parent's folder, from the template. Fill it in, then push it: the dry run shows `create "Release Process" under "<parent>"`, and `--apply` creates the page. A new page can include a table of contents (`toc::[]`); add other macros in Confluence afterwards. See [ADR-0007](docs/adr/0007-templates-and-new-pages.md).
@@ -99,9 +99,9 @@ Templates are your project's own `.adoc` skeletons, listed in `confluence.yaml`.
 ## Jira
 
 ```bash
-npx adf-bridge init --board https://your-site.atlassian.net/jira/software/c/projects/ABC/boards/42
-npx adf-bridge jira pull --dry-run
-npx adf-bridge jira pull
+npx --no-install adfx init --board https://your-site.atlassian.net/jira/software/c/projects/ABC/boards/42
+npx --no-install adfx jira pull --dry-run
+npx --no-install adfx jira pull
 ```
 
 This writes `jira.yaml`, then pulls the board's active sprint into `docs/jira/`: one page per issue (status, people, description, subtasks, links, comments) and `ABC/board.adoc` with the sprint by column. It is read-only, and the files are regenerated on every pull, so do not edit them. When the sprint closes, files for issues that left it are deleted; git keeps them.
@@ -122,27 +122,29 @@ See [ADR-0008](docs/adr/0008-jira-read-only-mirror.md).
 
 ## Commands
 
+Run these as `npx --no-install adfx …`.
+
 | Command | What it does |
 |---|---|
-| `adf-bridge init --root <page URL>` | Write `confluence.yaml` and `.gitattributes` |
-| `adf-bridge login` / `logout` / `whoami` | Save, remove or show your credentials (never the token) |
-| `adf-bridge confluence pull [--dry-run] [--page <id or URL>]` | Pull in-scope pages; never overwrites local edits |
-| `adf-bridge confluence push [files] [--page …] [--apply] [--accept-loss] [--message …]` | Dry run, or write with `--apply` |
-| `adf-bridge confluence new "<title>" --parent <page> [--template <name>]` | Write a draft for a new page; its first push creates it |
-| `adf-bridge confluence check` | Which blocks can be rebuilt exactly (the rest are pull-only) |
-| `adf-bridge confluence info` | Show the site, mirror, scope, wording rules and templates |
-| `adf-bridge confluence replace --map <file.json> [--apply]` | Replace exact table-cell values, e.g. real example data with fake |
-| `adf-bridge init --board <board URL>` | Write `jira.yaml` |
-| `adf-bridge jira pull [--dry-run]` | Pull the Jira issues `jira.yaml` names (read-only) |
+| `adfx init --root <page URL>` | Write `confluence.yaml` and `.gitattributes` |
+| `adfx login` / `logout` / `whoami` | Save, remove or show your credentials (never the token) |
+| `adfx confluence pull [--dry-run] [--page <id or URL>]` | Pull in-scope pages; never overwrites local edits |
+| `adfx confluence push [files] [--page …] [--apply] [--accept-loss] [--message …]` | Dry run, or write with `--apply` |
+| `adfx confluence new "<title>" --parent <page> [--template <name>]` | Write a draft for a new page; its first push creates it |
+| `adfx confluence check` | Which blocks can be rebuilt exactly (the rest are pull-only) |
+| `adfx confluence info` | Show the site, mirror, scope, wording rules and templates |
+| `adfx confluence replace --map <file.json> [--apply]` | Replace exact table-cell values, e.g. real example data with fake |
+| `adfx init --board <board URL>` | Write `jira.yaml` |
+| `adfx jira pull [--dry-run]` | Pull the Jira issues `jira.yaml` names (read-only) |
 
-Every command takes `--config <file>` and `--fixtures <file>` (read a JSON snapshot instead of the API). Run `adf-bridge help` for the full list.
+Every command takes `--config <file>` and `--fixtures <file>` (read a JSON snapshot instead of the API). Run `adfx help` for the full list.
 
 ## confluence.yaml
 
 ```yaml
 site: your-site.atlassian.net
 out: docs/confluence                 # mirror folder, relative to this file
-message: Published with adf-bridge   # default version comment
+message: Published with adfx   # default version comment
 roots:                               # synced with everything under them
   - id: "123456"
     title: Handbook                  # for people; only id is used
@@ -161,7 +163,7 @@ Values are always read as text, and unknown keys are errors, so a typo cannot qu
 
 ## Credentials
 
-`adf-bridge login` saves your email and token in `%APPDATA%\adf-bridge\credentials.json` on Windows, or `~/.config/adf-bridge/credentials.json` elsewhere, readable only by you. For CI, set `ATLASSIAN_EMAIL` and `ATLASSIAN_API_TOKEN` instead; environment variables always win. The older `CONFLUENCE_EMAIL` and `CONFLUENCE_API_TOKEN` also work.
+`adfx login` saves your email and token in `%APPDATA%\adfx\credentials.json` on Windows, or `~/.config/adfx/credentials.json` elsewhere, readable only by you. For CI, set `ATLASSIAN_EMAIL` and `ATLASSIAN_API_TOKEN` instead; environment variables always win. The older `CONFLUENCE_EMAIL` and `CONFLUENCE_API_TOKEN` also work.
 
 ## How it works
 
@@ -174,7 +176,7 @@ Values are always read as text, and unknown keys are errors, so a typo cannot qu
 ## Development
 
 ```bash
-git clone https://github.com/smorey2/adf-bridge && cd adf-bridge
+git clone https://github.com/smorey2/adfx && cd adfx
 npm install
 npm test
 npm run typecheck

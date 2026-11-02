@@ -24,7 +24,7 @@ function fixture(): FixtureData {
 }
 
 async function setup() {
-  const root = tmp('adf-bridge-new-');
+  const root = tmp('adfx-new-');
   fs.mkdirSync(path.join(root, 'docs', 'confluence', '_templates'), { recursive: true });
   fs.writeFileSync(path.join(root, 'docs', 'confluence', '_templates', 'process.adoc'), TEMPLATE);
   const config = parseConfluenceConfig('site: x.atlassian.net\nroots:\n  - id: "100"\ntemplates:\n  process: docs/confluence/_templates/process.adoc\n', { root });

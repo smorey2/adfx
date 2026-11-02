@@ -68,7 +68,7 @@ function fixture(): JiraFixture {
 const configText = 'site: x.atlassian.net\nboards:\n  - id: "42"\n';
 
 function setup(text = configText) {
-  const root = tmp('adf-bridge-jira-');
+  const root = tmp('adfx-jira-');
   const config = parseJiraConfig(text, { root });
   const data = fixture();
   const run = (opts: { dryRun?: boolean } = {}) => pullJira({ api: new JiraFixtureApi(data), config, log: quiet, ...opts });
@@ -83,7 +83,7 @@ test('a board pull writes one file per active-sprint issue and a board page by c
 
   const one = s.read('OMS/OMS-1.adoc');
   assert.match(one, /^= OMS-1: Charge return fees\n:jira-key: OMS-1\n:jira-source: https:\/\/x\.atlassian\.net\/browse\/OMS-1\n/);
-  assert.match(one, /^:generated: adf-bridge jira pull; do not edit/m);
+  assert.match(one, /^:generated: adfx jira pull; do not edit/m);
   assert.match(one, /^h\|Sprint\n\|Sprint 7$/m);
   assert.match(one, /^== Description$/m);
   assert.match(one, /^=== Steps$/m, 'description headings sit under Description');

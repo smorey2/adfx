@@ -67,7 +67,7 @@ export function parseJiraConfig(text: string, { file = null, root = process.cwd(
 
 export function loadJiraConfig({ start = process.cwd(), explicit }: { start?: string; explicit?: string } = {}): JiraConfig {
   const file = explicit ? path.resolve(explicit) : findUp(start, JIRA_CONFIG_NAMES);
-  if (!file) throw new Error(`no jira.yaml in ${path.resolve(start)} or any parent folder; run "adf-bridge init --board <board URL>"`);
+  if (!file) throw new Error(`no jira.yaml in ${path.resolve(start)} or any parent folder; run "adfx init --board <board URL>"`);
   if (!fs.existsSync(file)) throw new Error(`${file} not found`);
   return parseJiraConfig(fs.readFileSync(file, 'utf8'), { file, root: path.dirname(file) });
 }

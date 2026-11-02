@@ -73,7 +73,7 @@ Markdown cannot carry that data without HTML comments throughout the text. Ascii
 | any other macro or extension | **read-only placeholder** carrying `adf=`; push refuses edits to it |
 
 ### 3. Engine: scripts, not agents
-- adf-bridge (TypeScript, zero runtime dependencies) uses the Confluence REST API with each person's own API token (ADR-0006). Tokens are never committed.
+- adfx (TypeScript, zero runtime dependencies) uses the Confluence REST API with each person's own API token (ADR-0006). Tokens are never committed.
 - **`confluence pull`:**
   1. Resolve scope (ADR-0002: the descendant tree, cross-checked against CQL).
   2. Fetch each page's ADF and version.

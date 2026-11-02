@@ -56,7 +56,7 @@ test('confluence.yaml: defaults, paths relative to the file, wording and templat
     { root },
   );
   assert.strictEqual(c.out, path.join(root, 'docs', 'confluence'));
-  assert.strictEqual(c.message, 'Published with adf-bridge');
+  assert.strictEqual(c.message, 'Published with adfx');
   assert.deepStrictEqual(c.roots, [{ id: '100', type: 'page' }]);
   assert.deepStrictEqual(c.exclude, []);
   assert.deepStrictEqual(c.main.wording, ['Spell out contractions; "cannot" is one word.']);

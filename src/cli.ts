@@ -1,4 +1,4 @@
-// adf-bridge command line. Run "adf-bridge help" for usage.
+// adfx command line. Run "adfx help" for usage.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,35 +18,35 @@ import { findUp } from './core/files.ts';
 
 const TOKEN_URL = 'https://id.atlassian.com/manage-profile/security/api-tokens';
 
-const HELP = `adf-bridge: sync Confluence and Jira with git, as AsciiDoc.
+const HELP = `adfx: sync Confluence and Jira with git, as AsciiDoc.
 
 Setup
-  adf-bridge init [--root <page URL>]... [--board <Jira board URL>]... [--site <name>.atlassian.net] [--out <dir>] [--force]
+  adfx init [--root <page URL>]... [--board <Jira board URL>]... [--site <name>.atlassian.net] [--out <dir>] [--force]
       Write confluence.yaml (for --root) and/or jira.yaml (for --board), and make .adoc files use LF.
-  adf-bridge login [--site <site>] [--email <email>] [--token-stdin] [--no-verify]
+  adfx login [--site <site>] [--email <email>] [--token-stdin] [--no-verify]
       Save your Atlassian email and API token for this user (never in the repo).
       Create a token at ${TOKEN_URL}
-  adf-bridge logout [--site <site>]
-  adf-bridge whoami
+  adfx logout [--site <site>]
+  adfx whoami
       Show which account and credential source would be used (never the token).
 
 Confluence
-  adf-bridge confluence pull [--dry-run] [--page <id or URL>]... [--force]
+  adfx confluence pull [--dry-run] [--page <id or URL>]... [--force]
       Pull in-scope pages into the mirror. Never overwrites a file with local edits.
-  adf-bridge confluence push [files...] [--page <id or URL>]... [--apply] [--accept-loss] [--message <text>]
+  adfx confluence push [files...] [--page <id or URL>]... [--apply] [--accept-loss] [--message <text>]
       Show what would change on Confluence (dry run). Add --apply to write.
       A file made by "confluence new" is created as a new page.
-  adf-bridge confluence new "<title>" --parent <page id or URL> [--template <name>]
+  adfx confluence new "<title>" --parent <page id or URL> [--template <name>]
       Write a draft for a new page, from a template in confluence.yaml.
-  adf-bridge confluence check [files...] [--page <id or URL>]...
+  adfx confluence check [files...] [--page <id or URL>]...
       Can each block be rebuilt exactly? Blocks that cannot are pull-only.
-  adf-bridge confluence info
+  adfx confluence info
       Show the site, mirror, scope, wording rules and templates from confluence.yaml.
-  adf-bridge confluence replace --map <file.json> [--apply]
+  adfx confluence replace --map <file.json> [--apply]
       Replace exact table-cell values (e.g. real example data with fake data).
 
 Jira (read-only)
-  adf-bridge jira pull [--dry-run]
+  adfx jira pull [--dry-run]
       Pull the issues jira.yaml names: one file per issue plus a page per board.
       Files for issues that left scope are deleted (git keeps them).
 
@@ -138,7 +138,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     case 'jira':
       return jira(sub, { ...args, _: rest });
     default:
-      throw new Error(`unknown command "${cmd}"; run "adf-bridge help"`);
+      throw new Error(`unknown command "${cmd}"; run "adfx help"`);
   }
 }
 
@@ -182,7 +182,7 @@ async function confluence(sub: string | undefined, args: Args): Promise<number> 
       only(args, [...common, 'parent', 'template']);
       const title = args._.join(' ');
       const parent = value(args, 'parent');
-      if (!title) throw new Error('new needs a title: adf-bridge confluence new "Page title" --parent <page id or URL>');
+      if (!title) throw new Error('new needs a title: adfx confluence new "Page title" --parent <page id or URL>');
       if (!parent) throw new Error('new needs --parent <page id or URL> (an in-scope page or folder)');
       await newPage({ api: reader(cfg, args), config: cfg, outDir, title, parentId: pageIdOf(parent), template: value(args, 'template') });
       return 0;
@@ -293,7 +293,7 @@ async function init(args: Args): Promise<number> {
     const ids = boards.map(boardIdOf);
     const out = roots.length ? 'docs/jira' : value(args, 'out') || 'docs/jira';
     const yaml = [
-      '# adf-bridge Jira settings (read-only mirror): https://github.com/smorey2/adf-bridge',
+      '# adfx Jira settings (read-only mirror): https://github.com/smorey2/adfx',
       `site: ${site}`,
       `out: ${out}`,
       'boards:',
@@ -306,7 +306,7 @@ async function init(args: Args): Promise<number> {
     ].join('\n');
     fs.writeFileSync(path.resolve(JIRA_CONFIG_NAMES[0]), yaml);
     console.log(`wrote jira.yaml (site ${site}, board${ids.length === 1 ? '' : 's'} ${ids.join(', ')})`);
-    next.push('  adf-bridge jira pull --dry-run         see which issues would be pulled');
+    next.push('  adfx jira pull --dry-run         see which issues would be pulled');
   }
   if (!roots.length) return initDone(site, next);
 
@@ -316,7 +316,7 @@ async function init(args: Args): Promise<number> {
   const out = value(args, 'out') || 'docs/confluence';
 
   const yaml = [
-    '# adf-bridge Confluence settings: https://github.com/smorey2/adf-bridge',
+    '# adfx Confluence settings: https://github.com/smorey2/adfx',
     '# Only pages under these roots are ever pulled or pushed. Review changes to this file.',
     `site: ${site}`,
     `out: ${out}`,
@@ -332,7 +332,7 @@ async function init(args: Args): Promise<number> {
   ].join('\n');
   fs.writeFileSync(file, yaml);
   console.log(`wrote ${path.basename(file)} (site ${site}, ${ids.length} root${ids.length === 1 ? '' : 's'})`);
-  next.unshift('  adf-bridge confluence pull --dry-run   see what would be pulled', '  adf-bridge confluence pull             pull the pages into ' + out);
+  next.unshift('  adfx confluence pull --dry-run   see what would be pulled', '  adfx confluence pull             pull the pages into ' + out);
   return initDone(site, next);
 }
 
@@ -345,7 +345,7 @@ function initDone(site: string, next: string[]): number {
     console.log('added ".adoc text eol=lf" to .gitattributes');
   }
   console.log('\nNext:');
-  if (!resolveCredentials(site)) console.log('  adf-bridge login                       save your Atlassian email and API token');
+  if (!resolveCredentials(site)) console.log('  adfx login                       save your Atlassian email and API token');
   for (const l of next) console.log(l);
   return 0;
 }
@@ -390,7 +390,7 @@ async function whoami(args: Args): Promise<number> {
     return 1;
   }
   const c = resolveCredentials(site);
-  console.log(c ? `${site}: ${c.email} (from ${c.source})` : `${site}: not signed in; run "adf-bridge login"`);
+  console.log(c ? `${site}: ${c.email} (from ${c.source})` : `${site}: not signed in; run "adfx login"`);
   return c ? 0 : 1;
 }
 
@@ -449,7 +449,7 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-// Run when executed directly (bin/adf-bridge.js imports main instead).
+// Run when executed directly (bin/adfx.js imports main instead).
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   run();
 }

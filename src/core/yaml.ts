@@ -1,4 +1,4 @@
-// A small, strict YAML subset for adf-bridge config files: block mappings and sequences, plain and
+// A small, strict YAML subset for adfx config files: block mappings and sequences, plain and
 // quoted scalars, flow lists like [a, "b"], [] and {}, and # comments. Every scalar is read as a
 // string (no implicit numbers, booleans or dates), so page IDs and keys are never mangled. Anything
 // outside the subset (anchors, tags, block scalars, multiple documents, tabs) is an error with a line
