@@ -291,6 +291,34 @@ export function indexExisting(outDir: string): Map<string, ExistingFile> {
   return out;
 }
 
+// A new page waiting for its first push: a file with :confluence-parent: and no :confluence-id:
+// (written by "confluence new").
+export interface DraftFile {
+  rel: string;
+  title: string;
+  parentId: string;
+}
+
+export function indexDrafts(outDir: string): Map<string, DraftFile> {
+  const out = new Map<string, DraftFile>();
+  if (!fs.existsSync(outDir)) return out;
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== '_attachments' && e.name !== '_templates') walk(p);
+      } else if (e.name.endsWith('.adoc')) {
+        const h = header.parse(fs.readFileSync(p, 'utf8'));
+        if (!h || h.attrs['confluence-id'] || !h.attrs['confluence-parent']) continue;
+        const rel = relPosix(outDir, p);
+        out.set(rel, { rel, title: h.title.trim(), parentId: h.attrs['confluence-parent'] });
+      }
+    }
+  };
+  walk(outDir);
+  return out;
+}
+
 function moveFile(outDir: string, fromRel: string, toRel: string, pageId: string): void {
   const from = path.join(outDir, fromRel);
   const to = path.join(outDir, toRel);

@@ -125,6 +125,23 @@ export function pageWriter(opts: { site: string; fetchImpl?: FetchLike } & Crede
     );
 }
 
+export interface NewPage {
+  spaceId: string;
+  parentId: string;
+  title: string;
+  adf: AdfNode;
+}
+
+export type PageCreator = (p: NewPage) => Promise<{ id: string; version?: { number: number } }>;
+
+export function pageCreator(opts: { site: string; fetchImpl?: FetchLike } & Credentials): PageCreator {
+  const http = new AtlassianClient(opts);
+  return async ({ spaceId, parentId, title, adf }) => {
+    const res = await http.send('POST', '/wiki/api/v2/pages', { spaceId, status: 'current', title, parentId, body: { representation: 'atlas_doc_format', value: JSON.stringify(adf) } });
+    return { id: String(res.id), version: res.version };
+  };
+}
+
 // Same interface, backed by a JSON file. Used by tests and for offline dry runs.
 // Shape: { spaces: { <spaceId>: <key> }, content: { <id>: { type, title, parentId, spaceId, status,
 //          version, adf, attachments: [{ title, fileId, fileSize, mediaType, downloadLink, base64 }] } } }

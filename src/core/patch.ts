@@ -14,7 +14,20 @@ interface Env {
   refs: Refs;
   shortIds: Map<string, string>;
   errors: string[];
+  newMacros?: boolean; // creating a page: block macros in NEW_MACROS may be added
 }
+
+// Macros a new page may contain, built from nothing. Everything else is added in Confluence.
+const NEW_MACROS: Record<string, () => AdfNode> = {
+  toc: () => ({
+    type: 'extension',
+    attrs: {
+      extensionType: 'com.atlassian.confluence.macro.core',
+      extensionKey: 'toc',
+      parameters: { macroParams: {}, macroMetadata: { schemaVersion: { value: '1' }, title: 'Table of Contents' } },
+    },
+  }),
+};
 
 export interface Change {
   kind: 'changed' | 'added' | 'removed';
@@ -39,11 +52,12 @@ export interface PatchInput {
   body: string; // the edited file body
   parseOpts: ParseOptions;
   shortIds: Map<string, string>;
+  newPage?: boolean; // liveAdf is empty and the page is being created
 }
 
-export function buildPatch({ liveAdf, conv, body, parseOpts, shortIds }: PatchInput): Patch {
+export function buildPatch({ liveAdf, conv, body, parseOpts, shortIds, newPage = false }: PatchInput): Patch {
   const parsed = parse(body, { ...parseOpts, refs: conv.refs });
-  const env: Env = { refs: conv.refs, shortIds, errors: [...parsed.errors] };
+  const env: Env = { refs: conv.refs, shortIds, errors: [...parsed.errors], newMacros: newPage };
   const oldNodes = liveAdf.content || [];
   const newNodes = parsed.blocks.map((b) => b.node);
   const pair = alignPairs(newNodes, oldNodes, env);
@@ -186,7 +200,12 @@ function fresh(n: AdfNode, env: Env): AdfNode | null {
     return null;
   }
   if (m.macro) {
-    env.errors.push(`new "${m.macro}" macro: macros can only be added in Confluence`);
+    if (env.newMacros && NEW_MACROS[m.macro] && n.type === 'extension') return NEW_MACROS[m.macro]();
+    env.errors.push(
+      env.newMacros
+        ? `new "${m.macro}" macro: a new page can only include ${Object.keys(NEW_MACROS).join(', ')}; add other macros in Confluence after the first push`
+        : `new "${m.macro}" macro: macros can only be added in Confluence`,
+    );
     return null;
   }
   if (m.nestedTable) {

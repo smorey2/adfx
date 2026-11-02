@@ -3,15 +3,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { convert, buildShortIds } from '../core/adoc.ts';
-import { parseAdf } from '../core/adf.ts';
+import { parseAdf, type AdfDoc } from '../core/adf.ts';
 import { buildPatch, gate, adfChanges } from '../core/patch.ts';
 import * as header from '../core/header.ts';
 import { writeFile, relPosix } from '../core/files.ts';
-import { pull, discover, mediaResolver, makeLinkResolver, hasMedia, indexExisting, type Log } from './pull.ts';
-import type { ConfluenceReader, PageWriter } from './api.ts';
+import { pull, discover, mediaResolver, makeLinkResolver, hasMedia, indexExisting, indexDrafts, type Log, type Discovered } from './pull.ts';
+import type { ConfluenceReader, PageCreator, PageWriter } from './api.ts';
 import type { Scope } from './config.ts';
 
-export type PublishStatus = 'unchanged' | 'refused' | 'conflict' | 'needs --accept-loss' | 'ready' | 'published' | 'ok' | 'pull-only blocks';
+export type PublishStatus = 'unchanged' | 'refused' | 'conflict' | 'needs --accept-loss' | 'ready' | 'published' | 'created' | 'ok' | 'pull-only blocks';
 
 export interface PublishResult {
   id: string;
@@ -33,17 +33,24 @@ export interface PublishOptions {
   check?: boolean;
   message?: string | null;
   write?: PageWriter;
+  create?: PageCreator;
   repull?: (id: string) => Promise<unknown>;
   log?: Log;
 }
 
-export async function publish({ api, scope, outDir, files = [], pages = [], apply = false, acceptLoss = false, check = false, message, write, repull, log = console.log }: PublishOptions): Promise<PublishResult[]> {
+export async function publish({ api, scope, outDir, files = [], pages = [], apply = false, acceptLoss = false, check = false, message, write, create, repull, log = console.log }: PublishOptions): Promise<PublishResult[]> {
   const existing = indexExisting(outDir);
+  const drafts = indexDrafts(outDir);
   const byRel = new Map([...existing].map(([id, e]) => [e.rel, id]));
   let targets: string[] = [];
+  let newTargets: string[] = [];
   for (const f of files) {
     const rel = relPosix(outDir, path.resolve(f));
-    if (!byRel.has(rel)) throw new Error(`${f} is not a pulled Confluence page under ${outDir}`);
+    if (drafts.has(rel) && !check) {
+      newTargets.push(rel);
+      continue;
+    }
+    if (!byRel.has(rel)) throw new Error(`${f} is not a pulled Confluence page or a new-page draft under ${outDir}`);
     targets.push(byRel.get(rel)!);
   }
   for (const id of pages) {
@@ -53,14 +60,17 @@ export async function publish({ api, scope, outDir, files = [], pages = [], appl
   const results: PublishResult[] = [];
 
   // Scope (ADR-0002): the full tree, cross-checked against CQL, as for pull.
-  const { nodes } = await discover(api, scope);
+  const tree = await discover(api, scope);
+  const { nodes } = tree;
   if (!files.length && !pages.length) {
     // body edits change the sync hash; title edits are found by comparing with the live title
     const renamed = (id: string, title: string) => nodes.has(id) && title !== String(nodes.get(id)!.title).replace(/\s+/g, ' ').trim();
     targets = [...existing].filter(([id, e]) => check || e.localEdits || renamed(id, e.title)).map(([id]) => id);
+    if (!check) newTargets = [...drafts.keys()];
   }
   targets = [...new Set(targets)];
-  if (!targets.length) {
+  newTargets = [...new Set(newTargets)];
+  if (!targets.length && !newTargets.length) {
     log('nothing to publish: no files have local edits');
     return results;
   }
@@ -172,13 +182,129 @@ export async function publish({ api, scope, outDir, files = [], pages = [], appl
     await (repull || ((pid: string) => pull({ api, scope, outDir, only: [pid], force: true, log: () => {} })))(id);
   }
 
+  for (const rel of newTargets) {
+    const res = await createPage({ api, scope, outDir, rel, tree, byRel, apply, create, repull, log });
+    results.push(res);
+  }
+
   if (check) log(`\n${totals.blocks - totals.failed}/${totals.blocks} blocks can be rebuilt exactly; the rest are pull-only until the converter handles them.`);
   else {
     const by = (s: PublishStatus) => results.filter((r) => r.status === s).length;
-    log(`\nready ${by('ready')}, published ${by('published')}, refused ${by('refused')}, needs --accept-loss ${by('needs --accept-loss')}, conflicts ${by('conflict')}, unchanged ${by('unchanged')}`);
+    const created = by('created') ? `, created ${by('created')}` : '';
+    log(`\nready ${by('ready')}, published ${by('published')}${created}, refused ${by('refused')}, needs --accept-loss ${by('needs --accept-loss')}, conflicts ${by('conflict')}, unchanged ${by('unchanged')}`);
     if (!apply && by('ready')) log('(dry run: nothing written; re-run with --apply)');
   }
   return results;
+}
+
+// The first push of a "confluence new" draft creates the page (ADR-0007). The body is built from the
+// file alone; only macros a new page may contain are allowed.
+async function createPage({
+  api,
+  scope,
+  outDir,
+  rel,
+  tree,
+  byRel,
+  apply,
+  create,
+  repull,
+  log,
+}: {
+  api: ConfluenceReader;
+  scope: Scope;
+  outDir: string;
+  rel: string;
+  tree: Discovered;
+  byRel: Map<string, string>;
+  apply: boolean;
+  create?: PageCreator;
+  repull?: (id: string) => Promise<unknown>;
+  log: Log;
+}): Promise<PublishResult> {
+  const res: PublishResult = { id: '', rel, status: 'unchanged', errors: [], losses: [] };
+  const file = path.join(outDir, rel);
+  const h = header.parse(fs.readFileSync(file, 'utf8'))!;
+  const parentId = h.attrs['confluence-parent'];
+  const parent = tree.nodes.get(parentId);
+  const title = h.title.replace(/\s+/g, ' ').trim();
+  log(`== ${rel}  (new page${parent ? ` under "${parent.title}"` : ''})`);
+  const refuse = (why: string) => {
+    res.status = 'refused';
+    res.errors.push(why);
+    log(`   REFUSED: ${why}`);
+    return res;
+  };
+  if (!parent || parent.excluded) return refuse(`parent ${parentId} is not in scope (confluence.yaml)`);
+  if (!title) return refuse('the file needs a "= Title" line');
+  const taken = parent.children.map((c) => tree.nodes.get(c)!).find((c) => c.title.replace(/\s+/g, ' ').trim().toLowerCase() === title.toLowerCase());
+  if (taken) return refuse(`"${taken.title}" already exists under that parent (page ${taken.id}); pull it instead`);
+
+  const empty: AdfDoc = { type: 'doc', version: 1, content: [] };
+  const parseOpts = { headingOffset: Number(h.attrs['confluence-heading-offset'] || 0), resolveXref: (t: string) => xrefUrl(outDir, rel, t, byRel) };
+  const patch = buildPatch({ liveAdf: empty, conv: convert(empty), body: h.body, parseOpts, shortIds: new Map(), newPage: true });
+  for (const c of patch.changes) {
+    if (c.kind !== 'added') continue;
+    log(
+      `   + ${indent(
+        patch
+          .newText(c.new!)
+          .split('\n')
+          .map((l) => '+ ' + l)
+          .join('\n'),
+      ).trimStart()}`,
+    );
+  }
+  for (const err of patch.errors) log(`   REFUSED: ${err}`);
+  if (patch.errors.length) {
+    res.status = 'refused';
+    res.errors = patch.errors;
+    return res;
+  }
+  res.status = 'ready';
+  log(`   Confluence: create "${title}" under "${parent.title}" (${patch.adf.content!.length} blocks)`);
+  if (!apply) return res;
+  if (!create) throw new Error('no page creator configured; creating pages needs credentials (not --fixtures)');
+
+  const spaceId = (parent.type === 'folder' ? await api.folder(parent.id) : await api.page(parent.id)).spaceId;
+  const out = await create({ spaceId, parentId: parent.id, title, adf: patch.adf });
+  res.id = out.id;
+  res.status = 'created';
+  res.newVersion = (out.version && out.version.number) || 1;
+  log(`   created: page ${out.id}`);
+
+  // The file now belongs to the page. Version 0 means "pull me": a second push cannot create a
+  // duplicate, and the next pull replaces the draft with the page as Confluence stored it.
+  const spaceKey = tree.roots.find((r) => r.id === parent.rootId)!.spaceKey;
+  const claimed = header.render(
+    title,
+    [
+      ['confluence-id', out.id],
+      ['confluence-space', spaceKey],
+      ['confluence-version', 0],
+      ['scope-root', parent.rootId],
+      ['confluence-heading-offset', h.attrs['confluence-heading-offset'] || null],
+      ['confluence-sync-hash', header.hash(h.body)],
+      ['toc', h.attrs.toc || null],
+    ],
+    h.body,
+  );
+  writeFile(file, claimed);
+  const again = repull || ((id: string) => pull({ api, scope, outDir, only: [id], force: true, log: () => {} }));
+  // Confluence search can take a few seconds to list a new page, which the scope cross-check needs.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await again(out.id);
+      break;
+    } catch (e) {
+      if (attempt >= 4 || !/not in scope|cross-check/.test((e as Error).message)) {
+        log(`   the page was created, but pulling it back failed (${(e as Error).message.slice(0, 120)}); run "adf-bridge confluence pull" in a minute`);
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    }
+  }
+  return res;
 }
 
 // xref:../other/page.adoc -> that page's Confluence URL

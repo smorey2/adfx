@@ -30,7 +30,7 @@
   "files": [
     "bin",
     "dist",
-    "plugin",
+    "plugins",
     ".claude-plugin",
     "README.md",
     "LICENSE"

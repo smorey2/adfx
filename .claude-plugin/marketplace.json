@@ -1,0 +1,17 @@
+{
+  "name": "adf-bridge",
+  "owner": {
+    "name": "Sky Morey",
+    "url": "https://github.com/smorey2"
+  },
+  "description": "ADF Bridge for Claude Code: sync Jira and Confluence with git.",
+  "plugins": [
+    {
+      "name": "adf-bridge",
+      "source": "./plugins/adf-bridge",
+      "description": "Pull Confluence pages into the repo as AsciiDoc, push edits back without losing what Confluence stores, and create pages from project templates.",
+      "category": "documentation",
+      "tags": ["confluence", "jira", "atlassian", "asciidoc", "docs-as-code"]
+    }
+  ]
+}

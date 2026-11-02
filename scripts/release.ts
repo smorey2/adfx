@@ -27,13 +27,23 @@ if (out('git', ['tag', '--list', `v${version}`])) {
 sh('npm', ['run', 'typecheck']);
 sh('npm', ['test']);
 
-const pkgFile = new URL('../package.json', import.meta.url);
-const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
-pkg.version = version;
-fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2) + '\n');
+// The package, the plugin (users only get plugin updates when its version changes) and the install
+// line the plugin suggests all move to the new version together.
+const setJsonVersion = (rel: string) => {
+  const file = new URL(rel, import.meta.url);
+  const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+  json.version = version;
+  fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
+};
+setJsonVersion('../package.json');
+setJsonVersion('../plugins/adf-bridge/.claude-plugin/plugin.json');
+for (const rel of ['../plugins/adf-bridge/skills/confluence/SKILL.md', '../README.md']) {
+  const file = new URL(rel, import.meta.url);
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/smorey2\/adf-bridge#v\d+\.\d+\.\d+(-[\w.]+)?/g, `smorey2/adf-bridge#v${version}`));
+}
 
 sh('npm', ['run', 'build']);
-sh('git', ['add', '--all', 'package.json', 'dist']);
+sh('git', ['add', '--all', 'package.json', 'plugins', 'README.md', 'dist']);
 sh('git', ['commit', '-m', `Release v${version}`]);
 sh('git', ['tag', '-a', `v${version}`, '-m', `v${version}`]);
 console.log(`\nreleased v${version}. Push it with:\n  git push origin HEAD --follow-tags`);

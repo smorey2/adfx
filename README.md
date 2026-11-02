@@ -8,7 +8,10 @@ adf-bridge keeps Confluence pages in your repo as AsciiDoc, next to your code, a
 - **Push** your edits back. Only the blocks you changed are rebuilt; every other block is copied from the live page byte for byte.
 - **Safe by default.** Only pages under the roots you list are ever touched. Push is a dry run until you add `--apply`, and refuses edits it cannot carry back exactly.
 
-Jira (read-only: a board's active sprint, one file per issue) and Claude Code slash commands are coming next. See [Roadmap](#roadmap).
+- **Create** pages from your project's templates.
+- **Claude Code plugin:** `/adf-bridge:confluence pull | push | new | check` shows the dry run and only writes after you confirm in chat.
+
+Jira (read-only: a board's active sprint, one file per issue) is coming next. See [Roadmap](#roadmap).
 
 ## Install
 
@@ -22,6 +25,28 @@ Or run it without installing:
 
 ```bash
 npx github:smorey2/adf-bridge init
+```
+
+### Claude Code plugin
+
+In Claude Code:
+
+```
+/plugin marketplace add smorey2/adf-bridge
+/plugin install adf-bridge@adf-bridge
+```
+
+Then use `/adf-bridge:confluence pull`, `push`, `new` or `check`. The plugin runs the CLI installed in your project, so install that too.
+
+To set it up for everyone working in a repo, commit this to the repo's `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "adf-bridge": { "source": { "source": "github", "repo": "smorey2/adf-bridge" } }
+  },
+  "enabledPlugins": { "adf-bridge@adf-bridge": true }
+}
 ```
 
 ## Quick start
@@ -62,6 +87,16 @@ Push refuses, and says so, when:
 
 Editing text that has an inline comment detaches the comment. The dry run lists it under "will be lost", and pushing needs `--accept-loss`.
 
+## New pages
+
+```bash
+npx adf-bridge confluence new "Release Process" --parent <parent page URL> --template process
+```
+
+This writes a draft `.adoc` under the parent's folder, from the template. Fill it in, then push it: the dry run shows `create "Release Process" under "<parent>"`, and `--apply` creates the page. A new page can include a table of contents (`toc::[]`); add other macros in Confluence afterwards. See [ADR-0007](docs/adr/0007-templates-and-new-pages.md).
+
+Templates are your project's own `.adoc` skeletons, listed in `confluence.yaml`. Sections, audience labels and layout are up to you.
+
 ## Commands
 
 | Command | What it does |
@@ -70,7 +105,9 @@ Editing text that has an inline comment detaches the comment. The dry run lists 
 | `adf-bridge login` / `logout` / `whoami` | Save, remove or show your credentials (never the token) |
 | `adf-bridge confluence pull [--dry-run] [--page <id or URL>]` | Pull in-scope pages; never overwrites local edits |
 | `adf-bridge confluence push [files] [--page …] [--apply] [--accept-loss] [--message …]` | Dry run, or write with `--apply` |
+| `adf-bridge confluence new "<title>" --parent <page> [--template <name>]` | Write a draft for a new page; its first push creates it |
 | `adf-bridge confluence check` | Which blocks can be rebuilt exactly (the rest are pull-only) |
+| `adf-bridge confluence info` | Show the site, mirror, scope, wording rules and templates |
 | `adf-bridge confluence replace --map <file.json> [--apply]` | Replace exact table-cell values, e.g. real example data with fake |
 
 Every command takes `--config <file>` and `--fixtures <file>` (read a JSON snapshot instead of the API). Run `adf-bridge help` for the full list.
@@ -91,7 +128,7 @@ main:
   wording:                           # rules agents follow on every page
     - Spell out contractions; "cannot" is one word.
     - "American spelling: canceled, canceling."
-templates:                           # page skeletons (coming with "confluence new")
+templates:                           # page skeletons for "confluence new"
   process: docs/confluence/_templates/process.adoc
 ```
 
@@ -106,12 +143,11 @@ Values are always read as text, and unknown keys are errors, so a typo cannot qu
 - [ADR-0002](docs/adr/0002-scope.md): what is in scope, and how that is enforced.
 - [ADR-0005](docs/adr/0005-asciidoc-round-trip.md): the AsciiDoc format, the ADF mapping, and how push patches pages.
 - [ADR-0006](docs/adr/0006-distribution-config-credentials.md): distribution, config and credentials.
+- [ADR-0007](docs/adr/0007-templates-and-new-pages.md): page templates and creating pages.
 
 ## Roadmap
 
-1. **Claude Code plugin:** `/confluence pull | push | check`, which shows the dry run and only applies after you confirm in chat.
-2. **Page templates and `confluence new`:** create pages from your project's `.adoc` skeletons; the first push creates the page.
-3. **Jira, read-only:** `jira.yaml` with a board's active sprint as the starting point, one file per issue plus a board page.
+- **Jira, read-only:** `jira.yaml` with a board's active sprint as the starting point, one file per issue plus a board page.
 
 ## Development
 

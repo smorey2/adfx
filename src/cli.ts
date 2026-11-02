@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ConfluenceApi, FixtureApi, pageWriter, type ConfluenceReader, type PageWriter } from './confluence/api.ts';
+import { ConfluenceApi, FixtureApi, pageCreator, pageWriter, type ConfluenceReader, type PageCreator, type PageWriter } from './confluence/api.ts';
 import { CONFIG_NAMES, loadConfluenceConfig, type ConfluenceConfig } from './confluence/config.ts';
 import { pull } from './confluence/pull.ts';
 import { publish } from './confluence/publish.ts';
 import { replaceText } from './confluence/replace.ts';
+import { newPage } from './confluence/new.ts';
 import { credentialsFile, removeCredentials, requireCredentials, resolveCredentials, saveCredentials } from './core/credentials.ts';
 import { findUp } from './core/files.ts';
 
@@ -31,8 +32,13 @@ Confluence
       Pull in-scope pages into the mirror. Never overwrites a file with local edits.
   adf-bridge confluence push [files...] [--page <id or URL>]... [--apply] [--accept-loss] [--message <text>]
       Show what would change on Confluence (dry run). Add --apply to write.
+      A file made by "confluence new" is created as a new page.
+  adf-bridge confluence new "<title>" --parent <page id or URL> [--template <name>]
+      Write a draft for a new page, from a template in confluence.yaml.
   adf-bridge confluence check [files...] [--page <id or URL>]...
       Can each block be rebuilt exactly? Blocks that cannot are pull-only.
+  adf-bridge confluence info
+      Show the site, mirror, scope, wording rules and templates from confluence.yaml.
   adf-bridge confluence replace --map <file.json> [--apply]
       Replace exact table-cell values (e.g. real example data with fake data).
 
@@ -158,8 +164,34 @@ async function confluence(sub: string | undefined, args: Args): Promise<number> 
         check,
         message: value(args, 'message') || cfg.message,
         write: apply ? writer(cfg) : undefined,
+        create: apply ? creator(cfg) : undefined,
       });
       return results.some((r) => ['refused', 'conflict', 'needs --accept-loss'].includes(r.status)) ? 2 : 0;
+    }
+    case 'new': {
+      only(args, [...common, 'parent', 'template']);
+      const title = args._.join(' ');
+      const parent = value(args, 'parent');
+      if (!title) throw new Error('new needs a title: adf-bridge confluence new "Page title" --parent <page id or URL>');
+      if (!parent) throw new Error('new needs --parent <page id or URL> (an in-scope page or folder)');
+      await newPage({ api: reader(cfg, args), config: cfg, outDir, title, parentId: pageIdOf(parent), template: value(args, 'template') });
+      return 0;
+    }
+    case 'info': {
+      only(args, ['config']);
+      const rel = (p: string) => path.relative(cfg.root, p).split(path.sep).join('/') || '.';
+      console.log(`config     ${cfg.file}`);
+      console.log(`site       ${cfg.site}`);
+      console.log(`mirror     ${rel(cfg.out)}`);
+      console.log(`roots      ${cfg.roots.map((r) => r.id + (r.title ? ` (${r.title})` : '')).join(', ')}`);
+      console.log(`exclude    ${cfg.exclude.join(', ') || 'none'}`);
+      console.log('wording rules (follow them when writing page text):');
+      for (const w of cfg.main.wording) console.log(`  - ${w}`);
+      if (!cfg.main.wording.length) console.log('  none');
+      console.log('templates (for "confluence new --template <name>"):');
+      for (const [k, v] of Object.entries(cfg.templates)) console.log(`  ${k}: ${rel(v)}${fs.existsSync(v) ? '' : '  (missing)'}`);
+      if (!Object.keys(cfg.templates).length) console.log('  none');
+      return 0;
     }
     case 'replace': {
       only(args, [...common, 'map', 'apply']);
@@ -172,7 +204,7 @@ async function confluence(sub: string | undefined, args: Args): Promise<number> 
       return 0;
     }
     default:
-      throw new Error(`unknown confluence command "${sub ?? ''}"; use pull, push, check or replace`);
+      throw new Error(`unknown confluence command "${sub ?? ''}"; use pull, push, new, check, info or replace`);
   }
 }
 
@@ -184,6 +216,10 @@ function reader(cfg: ConfluenceConfig, args: Args): ConfluenceReader {
 
 function writer(cfg: ConfluenceConfig): PageWriter {
   return pageWriter({ site: cfg.site, ...requireCredentials(cfg.site) });
+}
+
+function creator(cfg: ConfluenceConfig): PageCreator {
+  return pageCreator({ site: cfg.site, ...requireCredentials(cfg.site) });
 }
 
 // ---------- setup ----------
