@@ -48,4 +48,4 @@ sh('npm', ['run', 'build']);
 sh('git', ['add', '--all', 'package.json', 'plugins', 'README.md', 'dist']);
 sh('git', ['commit', '-m', `Release v${version}`]);
 sh('git', ['tag', '-a', `v${version}`, '-m', `v${version}`]);
-console.log(`\nreleased v${version}. Push it with:\n  git push origin HEAD --follow-tags`);
+console.log(`\nreleased v${version}. Push it, then publish to npm:\n  git push origin HEAD --follow-tags\n  npm publish`);
