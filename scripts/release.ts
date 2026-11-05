@@ -1,7 +1,7 @@
 // npm run release <version>
 // Checks, builds dist/, commits it with the new version, and tags v<version>. dist/ only changes here,
 // so installs from a tag never need a build. Pushing is left to you:
-//   git push origin HEAD --follow-tags
+//   git push origin HEAD --follow-tags && npm publish
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';

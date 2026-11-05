@@ -9,7 +9,7 @@ Arguments: $ARGUMENTS
 
 ## Running adfx
 
-- In this skill, `adfx` means `npx --no-install adfx`, run from the project. `--no-install` makes sure the copy pinned in the project runs, never a download. If `npx --no-install adfx --version` fails, tell the user to add it with `npm i -D github:smorey2/adfx#v0.1.0` (or the release they use), and stop.
+- In this skill, `adfx` means `npx --no-install adfx`, run from the project. `--no-install` makes sure the copy pinned in the project runs, never a download. If `npx --no-install adfx --version` fails, tell the user to add it with `npm i -D adfx2`, and stop.
 - If there is no `jira.yaml`, ask for the Jira board URL, then run `adfx init --board <board URL>`.
 - Run `adfx whoami`. If it says "not signed in", ask the user to run `npx --no-install adfx login` in their own terminal. Never ask for the API token in chat, never put it on a command line, and never print it.
 

@@ -14,7 +14,7 @@ The sync began as scripts inside one project's repo. Extracting it means any pro
 
 ### 1. Distribution
 - **Public and MIT licensed**, on GitHub at `smorey2/adfx`.
-- **Installed from git tags, not the npm registry:** `npm i -D github:smorey2/adfx#v0.1.0`, or `npx github:smorey2/adfx init`. npm refuses the name `adfx` (too close to `add`), so the package is registered as `adfx2`; the command is still `adfx`. Commands run as `npx --no-install adfx` so a missing project copy fails instead of downloading anything.
+- **Installed from npm as `adfx2`:** `npm i -D adfx2`, or `npx adfx2 init` without installing. npm refuses the name `adfx` (too close to `add`), so the package is `adfx2`; the command is still `adfx`. Git tags work too: `npm i -D github:smorey2/adfx#v0.1.0`. Commands run as `npx --no-install adfx` so a missing project copy fails instead of downloading anything.
 - **A Claude Code plugin from the same repo** adds `/adfx:confluence` and `/adfx:jira`, which call the CLI installed in the project.
 - **TypeScript source, erasable syntax only.** Development and tests run `src/` directly on Node's built-in type stripping, with no build. CI type-checks with `tsc` and runs the tests on Windows, macOS and Linux.
 - **`dist/` is built and committed only by `npm run release <version>`,** which also tags the release. Installs and the plugin run `dist/`, so nothing is built on users' machines. Between releases, `dist/` on the main branch is the last release, by design.

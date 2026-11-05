@@ -14,17 +14,15 @@ adfx keeps Confluence pages in your repo as AsciiDoc, next to your code, and pus
 
 ## Install
 
-You need [Node.js](https://nodejs.org) 22 or later.
+You need [Node.js](https://nodejs.org) 22 or later. In your project:
 
 ```bash
-npm i -D github:smorey2/adfx#v0.1.0
+npm i -D adfx2
 ```
 
-Or run it without installing:
+The npm package is `adfx2` because npm refuses the name `adfx`; the command it installs is `adfx`.
 
-```bash
-npx github:smorey2/adfx init
-```
+To try it without installing, run `npx adfx2 init`. To pin a git tag instead of the npm release, use `npm i -D github:smorey2/adfx#v0.1.0`.
 
 ### Claude Code plugin
 

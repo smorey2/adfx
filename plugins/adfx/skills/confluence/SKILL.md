@@ -11,7 +11,7 @@ The first word is the action: `pull`, `push`, `new` or `check`. If it is missing
 
 ## Running adfx
 
-- In this skill, `adfx` means `npx --no-install adfx`, run from the project. `--no-install` makes sure the copy pinned in the project runs, never a download. If `npx --no-install adfx --version` fails, it is not installed: tell the user to add it with `npm i -D github:smorey2/adfx#v0.1.0` (or the release they use), and stop.
+- In this skill, `adfx` means `npx --no-install adfx`, run from the project. `--no-install` makes sure the copy pinned in the project runs, never a download. If `npx --no-install adfx --version` fails, it is not installed: tell the user to add it with `npm i -D adfx2`, and stop.
 - If there is no `confluence.yaml`, ask for the Confluence page whose tree the project should sync, then run `adfx init --root <page URL>`.
 - Run `adfx whoami`. If it says "not signed in", ask the user to run `npx --no-install adfx login` in their own terminal and tell you when it is done. Never ask for the API token in chat, never put it on a command line, and never print it.
 - Run `adfx confluence info` once per session. It lists the mirror folder, the scope, the project's **wording rules** and its **templates**. Follow the wording rules whenever you write page text.
