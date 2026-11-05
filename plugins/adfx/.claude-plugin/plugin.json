@@ -10,5 +10,11 @@
   "homepage": "https://github.com/smorey2/adfx",
   "repository": "https://github.com/smorey2/adfx",
   "license": "MIT",
-  "keywords": ["confluence", "jira", "atlassian", "asciidoc", "docs-as-code"]
+  "keywords": [
+    "confluence",
+    "jira",
+    "atlassian",
+    "asciidoc",
+    "docs-as-code"
+  ]
 }

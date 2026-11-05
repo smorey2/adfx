@@ -12,7 +12,8 @@ if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
   process.exit(1);
 }
 
-const sh = (cmd: string, args: string[]) => execFileSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' });
+// npm is npm.cmd on Windows and needs a shell there; git does not, and a shell would split "Release vX".
+const sh = (cmd: string, args: string[]) => execFileSync(cmd, args, { stdio: 'inherit', shell: cmd === 'npm' && process.platform === 'win32' });
 const out = (cmd: string, args: string[]) => execFileSync(cmd, args, { encoding: 'utf8' }).trim();
 
 if (out('git', ['status', '--porcelain'])) {
